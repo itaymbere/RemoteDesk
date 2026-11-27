@@ -26,22 +26,38 @@ Alternativa Open Source ao AnyDesk baseada em **WebRTC + Cliente Web** com sinal
 - `coturn` (opcional, para NAT traversal via TURN)
 
 ### Agente — Debian 13 (X11 / Wayland)
-- Rust / Cargo (para compilar)
-- `ffmpeg`, `xdotool` (para X11) e `ydotool` (para Wayland):
+- Rust / Cargo (para compilar — via `rustup` ou pacotes da distribuição)
+- Dependências de compilação, `ffmpeg`, `xdotool` (para X11) e `ydotool` (para Wayland):
   ```bash
-  sudo apt install -y ffmpeg xdotool ydotool
+  sudo apt install -y build-essential ffmpeg xdotool ydotool
   ```
+- Em sessões Wayland, certifique-se de que o daemon `ydotoold` esteja em execução com permissão de acesso a `/dev/uinput`.
 
 ### Agente — macOS 27 Golden Gate
-- Rust / Cargo (para compilar)
-- `ffmpeg` e `cliclick` via Homebrew:
+- Xcode Command Line Tools, Rust / Cargo (para compilar — via Homebrew ou `rustup`), `ffmpeg` e `cliclick`:
   ```bash
-  brew install ffmpeg cliclick
+  xcode-select --install
+  brew install rust ffmpeg cliclick
   ```
-- Permissões em **Ajustes do Sistema > Privacidade e Segurança**: **Gravação de Tela** e **Acessibilidade** para o terminal/binário do agente.
+- Permissões em **Ajustes do Sistema > Privacidade e Segurança**: **Gravação de Tela**, **Acessibilidade** e **Automação** (`Finder` e `System Events`, usados via `osascript`) para o terminal ou binário do agente.
+- A captura de tela usa o dispositivo AVFoundation `1:none` em `agent/src/platform/macos.rs`; caso o índice da tela no seu Mac seja diferente, liste os dispositivos disponíveis com:
+  ```bash
+  ffmpeg -f avfoundation -list_devices true -i ""
+  ```
 
-### Agente — Windows 10 *(planejado)*
-- Captura via DXGI Desktop Duplication e entrada via `SendInput` (Win32 API).
+### Agente — Windows 10
+- Rust / Cargo (para compilar)
+- `ffmpeg` (com suporte a `gdigrab` e `libvpx`) disponível no `PATH`
+- PowerShell nativo (usado pelo agente para obter a resolução da tela e injetar eventos via `System.Windows.Forms` / `user32.dll`)
+
+## Variáveis de ambiente do Agente
+
+Configuradas em `agent/src/config.rs`:
+
+- `SERVER_URL`: URL do `api.php` do servidor de sinalização (padrão: `http://localhost:8080/api.php`)
+- `HOST_ID`: identificador único do host (padrão: `debian-host-01`; no macOS/Windows defina por exemplo `macos-host-01` ou `windows-host-01`)
+- `HOST_NAME`: nome amigável exibido na interface web (padrão: mesmo valor de `HOST_ID`)
+- `HOST_TOKEN`: token secreto para autenticar o host no servidor (padrão: `changeme-token`; troque em produção)
 
 ## Como executar localmente
 
@@ -49,14 +65,29 @@ Alternativa Open Source ao AnyDesk baseada em **WebRTC + Cliente Web** com sinal
    ```bash
    php -S 0.0.0.0:8080 -t server-php/public
    ```
-2. Rode o agente na máquina alvo:
+2. Rode o agente na máquina alvo (ou aponte `SERVER_URL` para seu servidor remoto):
    ```bash
    cd agent
-   SERVER_URL=http://localhost:8080/api.php cargo run
+   SERVER_URL=http://localhost:8080/api.php HOST_ID=macos-host-01 HOST_TOKEN=changeme-token cargo run
    ```
 3. Acesse `http://localhost:8080` e entre com o usuário padrão (`admin` / `admin123`).
 
 > **Atenção:** altere a senha padrão, `app_secret` e configure `turn_urls` / `turn_secret` em `server-php/config.php` antes de usar em produção.
+
+### Serviço em segundo plano no macOS (`launchd`)
+
+1. Compile o binário em release e instale-o:
+   ```bash
+   cd agent
+   cargo build --release
+   sudo cp target/release/ag-remotedesk-agent /usr/local/bin/ag-remotedesk-agent
+   ```
+2. Copie [agent/deploy/com.agremotedesk.agent.plist](agent/deploy/com.agremotedesk.agent.plist) para `~/Library/LaunchAgents/com.agremotedesk.agent.plist`, ajuste `SERVER_URL`, `HOST_ID` e `HOST_TOKEN` e carregue o serviço:
+   ```bash
+   cp agent/deploy/com.agremotedesk.agent.plist ~/Library/LaunchAgents/com.agremotedesk.agent.plist
+   # Edite SERVER_URL, HOST_ID e HOST_TOKEN no arquivo plist antes de carregar
+   launchctl load -w ~/Library/LaunchAgents/com.agremotedesk.agent.plist
+   ```
 
 ## Changelog
 
