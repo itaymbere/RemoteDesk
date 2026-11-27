@@ -24,7 +24,106 @@ enum InputEvent {
     #[serde(rename = "keydown")]
     KeyDown { key: String },
     #[serde(rename = "keyup")]
-    KeyUp { key: String },
+    KeyUp {
+        #[allow(dead_code)]
+        key: String,
+    },
+}
+
+#[derive(Debug, Deserialize)]
+struct AgentVideoConfig {
+    #[serde(default = "default_fps")]
+    fps: u64,
+    #[serde(default = "default_bitrate")]
+    bitrate: String,
+}
+
+fn default_fps() -> u64 {
+    15
+}
+
+fn default_bitrate() -> String {
+    "1500k".to_string()
+}
+
+fn load_video_config() -> AgentVideoConfig {
+    if let Ok(text) = std::fs::read_to_string("agent_config.json") {
+        if let Ok(cfg) = serde_json::from_str::<AgentVideoConfig>(&text) {
+            return cfg;
+        }
+    }
+    AgentVideoConfig {
+        fps: default_fps(),
+        bitrate: default_bitrate(),
+    }
+}
+
+fn extract_avfoundation_index(line: &str) -> Option<u32> {
+    let marker_pos = line.find("Capture screen")?;
+    let prefix = line[..marker_pos].trim_end();
+    let open = prefix.rfind('[')?;
+    let close = prefix.rfind(']')?;
+    if close > open && close + 1 == prefix.len() {
+        prefix[open + 1..close].trim().parse::<u32>().ok()
+    } else {
+        None
+    }
+}
+
+/// Extracts the AVFoundation screen capture device (`<idx>:none`) from `ffmpeg -list_devices` output.
+fn parse_avfoundation_screen_device(output: &str) -> Option<String> {
+    let mut in_video_section = false;
+    let mut fallback: Option<u32> = None;
+
+    for line in output.lines() {
+        if line.contains("AVFoundation video devices:") {
+            in_video_section = true;
+            continue;
+        }
+        if line.contains("AVFoundation audio devices:") {
+            if in_video_section {
+                break;
+            }
+            continue;
+        }
+        if !in_video_section {
+            continue;
+        }
+        if let Some(idx) = extract_avfoundation_index(line) {
+            if line.contains("Capture screen 0") {
+                return Some(format!("{idx}:none"));
+            }
+            if fallback.is_none() {
+                fallback = Some(idx);
+            }
+        }
+    }
+
+    fallback.map(|idx| format!("{idx}:none"))
+}
+
+/// Resolves the AVFoundation input device via `AVFOUNDATION_DEVICE`, auto-detection, or `"1:none"` fallback.
+fn detect_avfoundation_device() -> String {
+    if let Ok(val) = std::env::var("AVFOUNDATION_DEVICE") {
+        let trimmed = val.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+
+    if let Ok(out) = Command::new("ffmpeg")
+        .args(["-f", "avfoundation", "-list_devices", "true", "-i", ""])
+        .output()
+    {
+        let mut combined = String::from_utf8_lossy(&out.stderr).into_owned();
+        combined.push('\n');
+        combined.push_str(&String::from_utf8_lossy(&out.stdout));
+        if let Some(dev) = parse_avfoundation_screen_device(&combined) {
+            return dev;
+        }
+    }
+
+    "1:none".to_string()
 }
 
 fn screen_resolution() -> (f64, f64) {
@@ -49,16 +148,26 @@ fn screen_resolution() -> (f64, f64) {
 
 /// Captura de tela no macOS 27 Golden Gate via ffmpeg (avfoundation) -> VP8 IVF.
 pub async fn stream_screen(video_track: Arc<TrackLocalStaticSample>) -> Result<()> {
-    info!("Iniciando captura macOS 27 Golden Gate via ffmpeg (avfoundation) -> VP8...");
+    let vcfg = load_video_config();
+    let fps_clamped = vcfg.fps.clamp(1, 60);
+    let fps_str = fps_clamped.to_string();
+    let frame_duration = Duration::from_millis(1000 / fps_clamped);
+    let device = detect_avfoundation_device();
+
+    info!(
+        "Iniciando captura macOS 27 Golden Gate via ffmpeg (avfoundation, device={}, {}fps, {}) -> VP8...",
+        device, fps_str, vcfg.bitrate
+    );
 
     let mut child = TokioCommand::new("ffmpeg")
         .args([
             "-f", "avfoundation",
-            "-framerate", "30",
+            "-framerate", &fps_str,
             "-capture_cursor", "1",
-            "-i", "1:none",
+            "-i", &device,
+            "-pix_fmt", "yuv420p",
             "-c:v", "libvpx",
-            "-b:v", "1500k",
+            "-b:v", &vcfg.bitrate,
             "-deadline", "realtime",
             "-cpu-used", "8",
             "-f", "ivf",
@@ -90,7 +199,7 @@ pub async fn stream_screen(video_track: Arc<TrackLocalStaticSample>) -> Result<(
 
         let sample = Sample {
             data: Bytes::from(frame_data),
-            duration: Duration::from_millis(33),
+            duration: frame_duration,
             ..Default::default()
         };
 
@@ -138,4 +247,52 @@ pub fn inject_input(event_json: &str) -> Result<()> {
         InputEvent::KeyUp { .. } => {}
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_avfoundation_screen_device;
+
+    #[test]
+    fn detects_capture_screen_0_from_real_ffmpeg_output() {
+        let sample = "\
+[AVFoundation indev @ 0x7b1d018180] AVFoundation video devices:
+[AVFoundation indev @ 0x7b1d018180] [0] Câmera FaceTime HD  [uid:EAB7A68F-EC2B-4487-AADF-D8A91C1CB782]
+[AVFoundation indev @ 0x7b1d018180] [1] OBS Virtual Camera  [uid:7626645E-4425-469E-9D8B-97E0FA59AC75]
+[AVFoundation indev @ 0x7b1d018180] [2] Câmera do iPhone Rod  [uid:240F70AA-4D6D-4777-B3A4-8D3800000001]
+[AVFoundation indev @ 0x7b1d018180] [3] Câmera da Visualização da Mesa iPhone Rod  [uid:240F70AA-4D6D-4777-B3A4-8D3800000002]
+[AVFoundation indev @ 0x7b1d018180] [4] Capture screen 0
+[AVFoundation indev @ 0x7b1d018180] AVFoundation audio devices:
+[AVFoundation indev @ 0x7b1d018180] [0] Microfone (MacBook Pro)  [uid:BuiltInMicrophoneDevice]";
+
+        assert_eq!(
+            parse_avfoundation_screen_device(sample),
+            Some("4:none".to_string())
+        );
+    }
+
+    #[test]
+    fn prefers_capture_screen_0_over_capture_screen_1() {
+        let sample = "\
+[AVFoundation indev @ 0x1] AVFoundation video devices:
+[AVFoundation indev @ 0x1] [2] Capture screen 1
+[AVFoundation indev @ 0x1] [3] Capture screen 0
+[AVFoundation indev @ 0x1] AVFoundation audio devices:";
+
+        assert_eq!(
+            parse_avfoundation_screen_device(sample),
+            Some("3:none".to_string())
+        );
+    }
+
+    #[test]
+    fn ignores_audio_section_and_returns_none_without_screen_device() {
+        let sample = "\
+[AVFoundation indev @ 0x1] AVFoundation video devices:
+[AVFoundation indev @ 0x1] [0] Câmera FaceTime HD
+[AVFoundation indev @ 0x1] AVFoundation audio devices:
+[AVFoundation indev @ 0x1] [0] Capture screen 0";
+
+        assert_eq!(parse_avfoundation_screen_device(sample), None);
+    }
 }

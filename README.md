@@ -40,7 +40,7 @@ Alternativa Open Source ao AnyDesk baseada em **WebRTC + Cliente Web** com sinal
   brew install rust ffmpeg cliclick
   ```
 - Permissões em **Ajustes do Sistema > Privacidade e Segurança**: **Gravação de Tela**, **Acessibilidade** e **Automação** (`Finder` e `System Events`, usados via `osascript`) para o terminal ou binário do agente.
-- A captura de tela usa o dispositivo AVFoundation `1:none` em `agent/src/platform/macos.rs`; caso o índice da tela no seu Mac seja diferente, liste os dispositivos disponíveis com:
+- A captura de tela detecta automaticamente o dispositivo `Capture screen 0` via AVFoundation em `agent/src/platform/macos.rs` e pode ser sobrescrita pela variável `AVFOUNDATION_DEVICE` (ex.: `AVFOUNDATION_DEVICE=4:none`). Para listar os dispositivos disponíveis:
   ```bash
   ffmpeg -f avfoundation -list_devices true -i ""
   ```
@@ -52,12 +52,13 @@ Alternativa Open Source ao AnyDesk baseada em **WebRTC + Cliente Web** com sinal
 
 ## Variáveis de ambiente do Agente
 
-Configuradas em `agent/src/config.rs`:
+Configuradas em `agent/src/config.rs` (e captura macOS em `agent/src/platform/macos.rs`):
 
 - `SERVER_URL`: URL do `api.php` do servidor de sinalização (padrão: `http://localhost:8080/api.php`)
 - `HOST_ID`: identificador único do host (padrão: `debian-host-01`; no macOS/Windows defina por exemplo `macos-host-01` ou `windows-host-01`)
 - `HOST_NAME`: nome amigável exibido na interface web (padrão: mesmo valor de `HOST_ID`)
 - `HOST_TOKEN`: token secreto para autenticar o host no servidor (padrão: `changeme-token`; troque em produção)
+- `AVFOUNDATION_DEVICE` *(opcional, macOS)*: dispositivo AVFoundation usado pelo `ffmpeg` (ex.: `4:none`); se não definido, o agente detecta `Capture screen 0` automaticamente.
 
 ## Como executar localmente
 
