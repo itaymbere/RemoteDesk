@@ -22,7 +22,7 @@ O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.
 - Renomeação da identidade do projeto para **RemoteDeskIT** (`d43f554`).
 - Leitura dinâmica de `fps` e `bitrate` a partir de `agent_config.json` no agente Linux e sincronização automática das configurações atuais (`config_current`) para o navegador ao conectar (`e6399a1`).
 - Logs rotativos em arquivo no agente (`agent/src/logging.rs`) e logs de erro de `ffmpeg`/input no macOS (`13510b0`).
-- Sincronização automática de workspace (`.vscode/tasks.json`, `scripts/auto-sync.sh`) e trava `pre-commit` (`scripts/hooks/pre-commit`) para impedir commits desatualizados.
+- Sincronização automática de workspace (`.vscode/tasks.json`, `scripts/auto-sync.sh`), trava `pre-commit` (`scripts/hooks/pre-commit`) e ativador Windows (`setup-hooks-windows.cmd`).
 
 ### Corrigido
 - Suporte a candidatos ICE em loopback (`localhost`), latência de 15 FPS e `muted` no `<video>` para autoplay no Safari (`eaee42d`).
