@@ -6,6 +6,6 @@ set HOST_NAME=Windows 11
 set HOST_TOKEN=changeme-token
 set RUST_LOG=info
 
-cd /d "%~dp0.."
+cd /d "%~dp0agent"
 .\target\release\ag-remotedesk-agent.exe
 pause
