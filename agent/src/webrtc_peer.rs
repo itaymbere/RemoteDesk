@@ -41,6 +41,7 @@ pub async fn create_peer_for_offer(
     cfg: Config,
     client_id: String,
     offer_sdp: Value,
+    restart_tx: tokio::sync::watch::Sender<bool>,
 ) -> Result<PeerSession> {
     let mut m = MediaEngine::default();
     m.register_default_codecs()?;
@@ -81,10 +82,12 @@ pub async fn create_peer_for_offer(
 
     // Recebe DataChannel ("input") do navegador para mouse/teclado
     let host_name_dc = cfg.host_name.clone();
+    let restart_tx_dc = restart_tx.clone();
     pc.on_data_channel(Box::new(move |dc| {
         let label = dc.label().to_owned();
         let dc_open = Arc::clone(&dc);
         let host_name = host_name_dc.clone();
+        let restart_tx_msg = restart_tx_dc.clone();
         Box::pin(async move {
             info!("DataChannel aberto: {label}");
             dc.on_open(Box::new(move || {
@@ -114,13 +117,15 @@ pub async fn create_peer_for_offer(
             }));
             dc.on_message(Box::new(move |msg| {
                 let data = String::from_utf8_lossy(&msg.data).to_string();
+                let restart_tx_send = restart_tx_msg.clone();
                 Box::pin(async move {
                     if let Ok(val) = serde_json::from_str::<Value>(&data) {
                         if val.get("type").and_then(|v| v.as_str()) == Some("config") {
                             info!("Nova configuração recebida do servidor: {data}");
                             let _ = std::fs::write("agent_config.json", &data);
-                            info!("Reiniciando agente para aplicar configuração...");
-                            std::process::exit(0);
+                            info!("Solicitando reinício limpo do agente para aplicar configuração...");
+                            let _ = restart_tx_send.send(true);
+                            return;
                         }
                     }
                     if let Err(e) = platform::inject_input(&data) {

@@ -47,37 +47,52 @@ async fn main() {
     tokio::spawn(signaling::poll_sse_loop(http.clone(), cfg.clone(), tx));
 
     let mut peers: HashMap<String, PeerSession> = HashMap::new();
+    let (restart_tx, mut restart_rx) = tokio::sync::watch::channel(false);
 
-    while let Some(msg) = rx.recv().await {
-        match msg.signal_type.as_str() {
-            "offer" => {
-                info!("Offer recebido de {}", msg.sender_id);
-                if let Some(old) = peers.remove(&msg.sender_id) {
-                    old.close().await;
+    loop {
+        tokio::select! {
+            _ = restart_rx.wait_for(|&r| r) => {
+                info!("Encerrando sessões ativas antes de reiniciar...");
+                for (_, session) in peers.drain() {
+                    session.close().await;
                 }
-                match webrtc_peer::create_peer_for_offer(
-                    http.clone(),
-                    cfg.clone(),
-                    msg.sender_id.clone(),
-                    msg.payload,
-                )
-                .await
-                {
-                    Ok(session) => {
-                        peers.insert(msg.sender_id, session);
-                    }
-                    Err(e) => error!("Erro ao criar PeerConnection: {e}"),
-                }
+                tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+                break;
             }
-            "ice" => {
-                if let Some(session) = peers.get(&msg.sender_id) {
-                    if let Err(e) = webrtc_peer::add_ice_candidate(&session.pc, msg.payload).await {
-                        warn!("Erro ao adicionar ICE candidate: {e}");
+            maybe_msg = rx.recv() => {
+                let Some(msg) = maybe_msg else { break; };
+                match msg.signal_type.as_str() {
+                    "offer" => {
+                        info!("Offer recebido de {}", msg.sender_id);
+                        if let Some(old) = peers.remove(&msg.sender_id) {
+                            old.close().await;
+                        }
+                        match webrtc_peer::create_peer_for_offer(
+                            http.clone(),
+                            cfg.clone(),
+                            msg.sender_id.clone(),
+                            msg.payload,
+                            restart_tx.clone(),
+                        )
+                        .await
+                        {
+                            Ok(session) => {
+                                peers.insert(msg.sender_id, session);
+                            }
+                            Err(e) => error!("Erro ao criar PeerConnection: {e}"),
+                        }
+                    }
+                    "ice" => {
+                        if let Some(session) = peers.get(&msg.sender_id) {
+                            if let Err(e) = webrtc_peer::add_ice_candidate(&session.pc, msg.payload).await {
+                                warn!("Erro ao adicionar ICE candidate: {e}");
+                            }
+                        }
+                    }
+                    other => {
+                        warn!("Sinal desconhecido: {other}");
                     }
                 }
-            }
-            other => {
-                warn!("Sinal desconhecido: {other}");
             }
         }
     }

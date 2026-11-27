@@ -151,26 +151,45 @@ pub async fn stream_screen(video_track: Arc<TrackLocalStaticSample>) -> Result<(
     let vcfg = load_video_config();
     let fps_clamped = vcfg.fps.clamp(1, 60);
     let fps_str = fps_clamped.to_string();
+    let gop_str = (fps_clamped * 2).max(10).to_string();
+    let max_width: u32 = std::env::var("MAX_WIDTH")
+        .ok()
+        .and_then(|v| v.trim().parse().ok())
+        .filter(|&w| w >= 640)
+        .unwrap_or(1920);
+    let vf = format!("fps={fps_clamped},scale='min({max_width},iw)':-2:flags=lanczos");
     let frame_duration = Duration::from_millis(1000 / fps_clamped);
     let device = detect_avfoundation_device();
 
     info!(
-        "Iniciando captura macOS 27 Golden Gate via ffmpeg (avfoundation, device={}, {}fps, {}) -> VP8...",
-        device, fps_str, vcfg.bitrate
+        "Iniciando captura macOS 27 Golden Gate via ffmpeg (avfoundation, device={}, {}fps, {}, max_w={}) -> VP8...",
+        device, fps_str, vcfg.bitrate, max_width
     );
 
     let mut child = TokioCommand::new("ffmpeg")
         .args([
             "-loglevel", "warning",
             "-f", "avfoundation",
-            "-framerate", &fps_str,
+            "-framerate", "30",
             "-capture_cursor", "1",
+            "-pixel_format", "nv12",
             "-i", &device,
+            "-vf", &vf,
+            "-r", &fps_str,
             "-pix_fmt", "yuv420p",
             "-c:v", "libvpx",
             "-b:v", &vcfg.bitrate,
+            "-maxrate", &vcfg.bitrate,
+            "-bufsize", &vcfg.bitrate,
+            "-qmin", "4",
+            "-qmax", "30",
+            "-g", &gop_str,
+            "-keyint_min", &fps_str,
+            "-lag-in-frames", "0",
+            "-error-resilient", "1",
             "-deadline", "realtime",
-            "-cpu-used", "8",
+            "-cpu-used", "6",
+            "-threads", "4",
             "-f", "ivf",
             "-",
         ])
@@ -198,6 +217,7 @@ pub async fn stream_screen(video_track: Arc<TrackLocalStaticSample>) -> Result<(
     stdout.read_exact(&mut ivf_header).await?;
 
     let mut frame_hdr = [0u8; 12];
+    let mut sent_first_frame = false;
     while stdout.read_exact(&mut frame_hdr).await.is_ok() {
         let frame_size = u32::from_le_bytes([
             frame_hdr[0],
@@ -220,6 +240,10 @@ pub async fn stream_screen(video_track: Arc<TrackLocalStaticSample>) -> Result<(
         if let Err(e) = video_track.write_sample(&sample).await {
             debug!("Erro ao enviar sample VP8: {e}");
             break;
+        }
+        if !sent_first_frame {
+            sent_first_frame = true;
+            info!("Primeiro frame VP8 enviado ({} bytes)", frame_size);
         }
     }
 
