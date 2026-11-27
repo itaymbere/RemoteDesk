@@ -44,6 +44,10 @@ Alternativa Open Source ao AnyDesk baseada em **WebRTC + Cliente Web** com sinal
   ```bash
   ffmpeg -f avfoundation -list_devices true -i ""
   ```
+- Logs persistentes no macOS são gravados em `~/Library/Logs/RemoteDeskIT/agent.log` (rotação automática em `10 MB`). Para acompanhar em tempo real:
+  ```bash
+  tail -f ~/Library/Logs/RemoteDeskIT/agent.log
+  ```
 
 ### Agente — Windows 10
 - Rust / Cargo (para compilar)
@@ -59,6 +63,8 @@ Configuradas em `agent/src/config.rs` (e captura macOS em `agent/src/platform/ma
 - `HOST_NAME`: nome amigável exibido na interface web (padrão: mesmo valor de `HOST_ID`)
 - `HOST_TOKEN`: token secreto para autenticar o host no servidor (padrão: `changeme-token`; troque em produção)
 - `AVFOUNDATION_DEVICE` *(opcional, macOS)*: dispositivo AVFoundation usado pelo `ffmpeg` (ex.: `4:none`); se não definido, o agente detecta `Capture screen 0` automaticamente.
+- `LOG_FILE` *(opcional)*: caminho do arquivo de log do agente (padrão no macOS: `~/Library/Logs/RemoteDeskIT/agent.log`; nos demais SOs: `<temp_dir>/remotedesk-agent.log`).
+- `RUST_LOG` *(opcional)*: filtro de verbosidade dos logs (padrão: `info`; ex.: `debug` ou `ag_remotedesk_agent=debug,webrtc_ice=warn`).
 
 ## Como executar localmente
 

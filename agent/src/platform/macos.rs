@@ -4,9 +4,9 @@ use serde::Deserialize;
 use std::process::Command;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
-use tokio::io::AsyncReadExt;
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
 use tokio::process::Command as TokioCommand;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 use webrtc::media::Sample;
 use webrtc::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 
@@ -161,6 +161,7 @@ pub async fn stream_screen(video_track: Arc<TrackLocalStaticSample>) -> Result<(
 
     let mut child = TokioCommand::new("ffmpeg")
         .args([
+            "-loglevel", "warning",
             "-f", "avfoundation",
             "-framerate", &fps_str,
             "-capture_cursor", "1",
@@ -174,10 +175,22 @@ pub async fn stream_screen(video_track: Arc<TrackLocalStaticSample>) -> Result<(
             "-",
         ])
         .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
         .kill_on_drop(true)
         .spawn()
         .context("Falha ao iniciar ffmpeg (instale com: brew install ffmpeg)")?;
+
+    if let Some(stderr) = child.stderr.take() {
+        tokio::spawn(async move {
+            let mut lines = BufReader::new(stderr).lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                let trimmed = line.trim();
+                if !trimmed.is_empty() {
+                    warn!("[ffmpeg] {trimmed}");
+                }
+            }
+        });
+    }
 
     let mut stdout = child.stdout.take().context("Sem stdout do ffmpeg")?;
 
@@ -214,6 +227,12 @@ pub async fn stream_screen(video_track: Arc<TrackLocalStaticSample>) -> Result<(
     Ok(())
 }
 
+fn spawn_logged(cmd: &mut Command, tool: &str) {
+    if let Err(e) = cmd.spawn() {
+        warn!("Falha ao executar {tool}: {e}");
+    }
+}
+
 /// Injeção de mouse/teclado no macOS 27 Golden Gate via cliclick + osascript.
 pub fn inject_input(event_json: &str) -> Result<()> {
     let evt: InputEvent = serde_json::from_str(event_json)?;
@@ -222,28 +241,32 @@ pub fn inject_input(event_json: &str) -> Result<()> {
             let (w, h) = screen_resolution();
             let px = (x.clamp(0.0, 1.0) * w) as i32;
             let py = (y.clamp(0.0, 1.0) * h) as i32;
-            let _ = Command::new("cliclick").arg(format!("m:{px},{py}")).spawn();
+            spawn_logged(Command::new("cliclick").arg(format!("m:{px},{py}")), "cliclick");
         }
         InputEvent::MouseDown { button } => {
             let cmd = if button == 2 { "rc:." } else { "dd:." };
-            let _ = Command::new("cliclick").arg(cmd).spawn();
+            spawn_logged(Command::new("cliclick").arg(cmd), "cliclick");
         }
         InputEvent::MouseUp { button } => {
             if button != 2 {
-                let _ = Command::new("cliclick").arg("du:.").spawn();
+                spawn_logged(Command::new("cliclick").arg("du:."), "cliclick");
             }
         }
         InputEvent::Wheel { delta_y } => {
             let key_code = if delta_y < 0.0 { "126" } else { "125" };
-            let _ = Command::new("osascript")
-                .args(["-e", &format!("tell application \"System Events\" to key code {key_code}")])
-                .spawn();
+            spawn_logged(
+                Command::new("osascript")
+                    .args(["-e", &format!("tell application \"System Events\" to key code {key_code}")]),
+                "osascript",
+            );
         }
         InputEvent::KeyDown { key } => {
             let escaped = key.replace('"', "\\\"");
-            let _ = Command::new("osascript")
-                .args(["-e", &format!("tell application \"System Events\" to keystroke \"{escaped}\"")])
-                .spawn();
+            spawn_logged(
+                Command::new("osascript")
+                    .args(["-e", &format!("tell application \"System Events\" to keystroke \"{escaped}\"")]),
+                "osascript",
+            );
         }
         InputEvent::KeyUp { .. } => {}
     }

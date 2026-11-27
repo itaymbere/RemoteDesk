@@ -1,4 +1,5 @@
 mod config;
+mod logging;
 mod platform;
 mod signaling;
 mod webrtc_peer;
@@ -12,15 +13,16 @@ use crate::webrtc_peer::PeerSession;
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt::init();
-
     let cfg = Config::from_env();
+    let active_log = logging::init_logging(&cfg.log_file);
     let http = reqwest::Client::new();
 
     info!(
-        "Iniciando RemoteDeskIT Agent | host_id={} | os={}",
+        "Iniciando RemoteDeskIT Agent | host_id={} | os={} | server_url={} | log_file={}",
         cfg.host_id,
-        Config::os_name()
+        Config::os_name(),
+        cfg.server_url,
+        active_log.as_deref().unwrap_or("disabled")
     );
 
     if let Err(e) = signaling::register_host(&http, &cfg).await {
