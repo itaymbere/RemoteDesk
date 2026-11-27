@@ -75,6 +75,14 @@ Configuradas em `agent/src/config.rs` (e captura macOS em `agent/src/platform/ma
 
 > **Atenção:** altere a senha padrão, `app_secret` e configure `turn_urls` / `turn_secret` em `server-php/config.php` antes de usar em produção.
 
+### Executar binário compilado apontando para servidor remoto
+
+```bash
+cd agent
+cargo build --release
+SERVER_URL="http://<IP_DO_SERVIDOR>:8080/api.php" HOST_ID="macos-host-01" HOST_NAME="macOS" HOST_TOKEN="changeme-token" RUST_LOG="info" ./target/release/ag-remotedesk-agent
+```
+
 ### Serviço em segundo plano no macOS (`launchd`)
 
 1. Compile o binário em release e instale-o:
