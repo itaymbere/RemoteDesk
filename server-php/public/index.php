@@ -100,6 +100,34 @@ $loggedIn = !empty($_SESSION['user']);
         pc = new RTCPeerConnection({ iceServers });
         dc = pc.createDataChannel('input');
 
+        const videoEl = document.getElementById('remote-video');
+        const sendInput = (evt) => {
+          if (dc && dc.readyState === 'open') {
+            dc.send(JSON.stringify(evt));
+          }
+        };
+
+        videoEl.addEventListener('mousemove', (e) => {
+          const rect = videoEl.getBoundingClientRect();
+          sendInput({
+            type: 'mousemove',
+            x: (e.clientX - rect.left) / rect.width,
+            y: (e.clientY - rect.top) / rect.height,
+          });
+        });
+        videoEl.addEventListener('mousedown', (e) => sendInput({ type: 'mousedown', button: e.button }));
+        videoEl.addEventListener('mouseup', (e) => sendInput({ type: 'mouseup', button: e.button }));
+        videoEl.addEventListener('wheel', (e) => sendInput({ type: 'wheel', deltaY: e.deltaY }));
+        videoEl.addEventListener('contextmenu', (e) => e.preventDefault());
+        videoEl.addEventListener('keydown', (e) => {
+          e.preventDefault();
+          sendInput({ type: 'keydown', key: e.key });
+        });
+        videoEl.addEventListener('keyup', (e) => {
+          e.preventDefault();
+          sendInput({ type: 'keyup', key: e.key });
+        });
+
         pc.ontrack = (e) => {
           document.getElementById('remote-video').srcObject = e.streams[0];
         };
