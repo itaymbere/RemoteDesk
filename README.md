@@ -131,7 +131,7 @@ SERVER_URL="http://<IP_DO_SERVIDOR>:8080/api.php" HOST_ID="macos-host-01" HOST_N
    winget install Git.Git Rustlang.Rustup Gyan.FFmpeg
    ```
    *(Feche e reabra o PowerShell após instalar para atualizar o `PATH`.)*
-2. Clone o repositório e compile o binário em release:
+2. Clone o repositório e compile o binário em release (ou use `build-windows.cmd` na raiz):
    ```powershell
    git clone -b v0.0.1 https://github.com/itaymbere/RemoteDesk.git
    cd RemoteDesk\agent
@@ -152,7 +152,7 @@ SERVER_URL="http://<IP_DO_SERVIDOR>:8080/api.php" HOST_ID="macos-host-01" HOST_N
   ```bash
   git config core.hooksPath scripts/hooks
   ```
-- Para sincronização contínua em segundo plano:
+- Para sincronização contínua em segundo plano (no Windows, execute via Git Bash):
   ```bash
   ./scripts/auto-sync.sh
   ```
