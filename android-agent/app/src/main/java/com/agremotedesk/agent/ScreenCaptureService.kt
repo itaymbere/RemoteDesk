@@ -66,35 +66,128 @@ class ScreenCaptureService : Service() {
                 val rtcConfig = PeerConnection.RTCConfiguration(
                     listOf(PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer())
                 )
-                // TODO: Conectar loop SSE (api.php?action=poll) e criar PeerConnection com `track` + DataChannel
-                val _pc = factory.createPeerConnection(rtcConfig, object : PeerConnection.Observer {
-                    override fun onSignalingChange(p0: PeerConnection.SignalingState?) {}
-                    override fun onIceConnectionChange(p0: PeerConnection.IceConnectionState?) {}
-                    override fun onIceConnectionReceivingChange(p0: Boolean) {}
-                    override fun onIceGatheringChange(p0: PeerConnection.IceGatheringState?) {}
-                    override fun onIceCandidate(p0: org.webrtc.IceCandidate?) {}
-                    override fun onIceCandidatesRemoved(p0: Array<out org.webrtc.IceCandidate>?) {}
-                    override fun onAddStream(p0: org.webrtc.MediaStream?) {}
-                    override fun onRemoveStream(p0: org.webrtc.MediaStream?) {}
-                    override fun onDataChannel(dc: org.webrtc.DataChannel?) {
-                        dc?.registerObserver(object : org.webrtc.DataChannel.Observer {
-                            override fun onBufferedAmountChange(p0: Long) {}
-                            override fun onStateChange() {}
-                            override fun onMessage(buf: org.webrtc.DataChannel.Buffer) {
-                                val bytes = ByteArray(buf.data.remaining())
-                                buf.data.get(bytes)
-                                RemoteAccessibilityService.instance?.handleInputJson(String(bytes))
+
+                var activePc: PeerConnection? = null
+                var currentClientId = ""
+
+                fun ensurePeerConnection(clientId: String): PeerConnection? {
+                    currentClientId = clientId
+                    activePc?.close()
+                    activePc = factory.createPeerConnection(rtcConfig, object : PeerConnection.Observer {
+                        override fun onSignalingChange(p0: PeerConnection.SignalingState?) {}
+                        override fun onIceConnectionChange(p0: PeerConnection.IceConnectionState?) {}
+                        override fun onIceConnectionReceivingChange(p0: Boolean) {}
+                        override fun onIceGatheringChange(p0: PeerConnection.IceGatheringState?) {}
+                        override fun onIceCandidate(cand: org.webrtc.IceCandidate?) {
+                            if (cand != null && currentClientId.isNotEmpty()) {
+                                val payload = JSONObject()
+                                    .put("candidate", cand.sdp)
+                                    .put("sdpMid", cand.sdpMid)
+                                    .put("sdpMLineIndex", cand.sdpMLineIndex)
+                                sendSignal(currentClientId, "ice", payload)
                             }
-                        })
+                        }
+                        override fun onIceCandidatesRemoved(p0: Array<out org.webrtc.IceCandidate>?) {}
+                        override fun onAddStream(p0: org.webrtc.MediaStream?) {}
+                        override fun onRemoveStream(p0: org.webrtc.MediaStream?) {}
+                        override fun onDataChannel(dc: org.webrtc.DataChannel?) {
+                            dc?.registerObserver(object : org.webrtc.DataChannel.Observer {
+                                override fun onBufferedAmountChange(p0: Long) {}
+                                override fun onStateChange() {}
+                                override fun onMessage(buf: org.webrtc.DataChannel.Buffer) {
+                                    val bytes = ByteArray(buf.data.remaining())
+                                    buf.data.get(bytes)
+                                    RemoteAccessibilityService.instance?.handleInputJson(String(bytes))
+                                }
+                            })
+                        }
+                        override fun onRenegotiationNeeded() {}
+                    })
+                    activePc?.addTrack(track)
+                    return activePc
+                }
+
+                // Loop SSE (api.php?action=poll)
+                var lastId = 0L
+                while (true) {
+                    val req = Request.Builder()
+                        .url("$serverUrl?action=poll&host_id=$hostId&token=$hostToken&last_id=$lastId")
+                        .build()
+                    runCatching {
+                        http.newCall(req).execute().use { resp ->
+                            val sourceBuf = resp.body?.source() ?: return@use
+                            while (!sourceBuf.exhausted()) {
+                                val line = sourceBuf.readUtf8Line() ?: break
+                                if (line.startsWith("data: ")) {
+                                    val msg = JSONObject(line.removePrefix("data: "))
+                                    lastId = maxOf(lastId, msg.optLong("id", lastId))
+                                    val senderId = msg.optString("sender_id")
+                                    val type = msg.optString("type")
+                                    val payload = msg.optJSONObject("payload") ?: continue
+
+                                    when (type) {
+                                        "offer" -> {
+                                            val pc = ensurePeerConnection(senderId) ?: continue
+                                            val sdp = org.webrtc.SessionDescription(
+                                                org.webrtc.SessionDescription.Type.OFFER,
+                                                payload.optString("sdp")
+                                            )
+                                            pc.setRemoteDescription(object : org.webrtc.SdpObserver {
+                                                override fun onSetSuccess() {
+                                                    pc.createAnswer(object : org.webrtc.SdpObserver {
+                                                        override fun onCreateSuccess(ans: org.webrtc.SessionDescription) {
+                                                            pc.setLocalDescription(this, ans)
+                                                            val ansJson = JSONObject()
+                                                                .put("type", "answer")
+                                                                .put("sdp", ans.description)
+                                                            sendSignal(senderId, "answer", ansJson)
+                                                        }
+                                                        override fun onSetSuccess() {}
+                                                        override fun onCreateFailure(p0: String?) {}
+                                                        override fun onSetFailure(p0: String?) {}
+                                                    }, MediaConstraints())
+                                                }
+                                                override fun onCreateSuccess(p0: org.webrtc.SessionDescription?) {}
+                                                override fun onCreateFailure(p0: String?) {}
+                                                override fun onSetFailure(p0: String?) {}
+                                            }, sdp)
+                                        }
+                                        "ice" -> {
+                                            val cand = org.webrtc.IceCandidate(
+                                                payload.optString("sdpMid"),
+                                                payload.optInt("sdpMLineIndex"),
+                                                payload.optString("candidate")
+                                            )
+                                            activePc?.addIceCandidate(cand)
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
-                    override fun onRenegotiationNeeded() {}
-                })
-                _pc?.addTrack(track)
-                val _constraints = MediaConstraints()
+                    kotlinx.coroutines.delay(2000)
+                }
             }
         }
 
         return START_STICKY
+    }
+
+    private fun sendSignal(targetId: String, type: String, payload: JSONObject) {
+        val json = JSONObject()
+            .put("host_id", hostId)
+            .put("token", hostToken)
+            .put("target_id", targetId)
+            .put("type", type)
+            .put("payload", payload)
+            .toString()
+
+        val req = Request.Builder()
+            .url("$serverUrl?action=signal")
+            .post(json.toRequestBody("application/json".toMediaType()))
+            .build()
+
+        runCatching { http.newCall(req).execute().close() }
     }
 
     private fun registerHost() {
