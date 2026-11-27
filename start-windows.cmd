@@ -8,8 +8,8 @@ set RUST_LOG=info
 
 cd /d "%~dp0agent"
 if not exist ".\target\release\ag-remotedesk-agent.exe" (
-    echo Compilando agente...
-    cargo build --release
+    call "%~dp0build-windows.cmd"
+    if errorlevel 1 exit /b 1
 )
 .\target\release\ag-remotedesk-agent.exe
 pause
