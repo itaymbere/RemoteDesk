@@ -4,6 +4,16 @@ declare(strict_types=1);
 session_start();
 header('Content-Type: application/json; charset=utf-8');
 
+set_exception_handler(static function (Throwable $e): void {
+    error_log('api.php error: ' . $e->getMessage());
+    if (!headers_sent()) {
+        http_response_code(500);
+        header('Content-Type: application/json; charset=utf-8');
+    }
+    echo json_encode(['error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+    exit;
+});
+
 $config = require __DIR__ . '/../config.php';
 $overrideFile = __DIR__ . '/../data/server_config.json';
 if (is_file($overrideFile)) {
@@ -161,8 +171,10 @@ switch ($action) {
         );
         $stmt->execute([$targetId, $senderId, $type, $payload, time()]);
 
-        // Limpeza simples de sinais antigos (> 2 min)
-        $pdo->prepare('DELETE FROM signals WHERE created_at < ?')->execute([time() - 120]);
+        // Limpeza periódica de sinais antigos (> 2 min) apenas ao iniciar nova oferta
+        if ($type === 'offer') {
+            $pdo->prepare('DELETE FROM signals WHERE created_at < ?')->execute([time() - 120]);
+        }
 
         jsonResponse(['ok' => true]);
 

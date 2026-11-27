@@ -173,7 +173,10 @@ pub async fn create_peer_for_offer(
     pc.set_local_description(answer.clone()).await?;
 
     let answer_val = serde_json::to_value(&answer)?;
-    signaling::send_signal(&http, &cfg, &client_id, "answer", &answer_val).await?;
+    if let Err(e) = signaling::send_signal(&http, &cfg, &client_id, "answer", &answer_val).await {
+        let _ = pc.close().await;
+        return Err(e);
+    }
     info!("Answer enviado para {client_id}");
 
     // Inicia loop de captura de tela em background

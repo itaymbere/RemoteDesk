@@ -65,8 +65,59 @@ pub async fn send_signal(
         payload,
     };
 
-    client.post(&url).json(&body).send().await?.error_for_status()?;
-    Ok(())
+    let backoff_ms = [200u64, 500u64];
+    for attempt in 0..=backoff_ms.len() {
+        match client.post(&url).json(&body).send().await {
+            Ok(resp) => {
+                let status = resp.status();
+                if status.is_success() {
+                    return Ok(());
+                }
+                let resp_body = resp.text().await.unwrap_or_default();
+                if status.is_server_error() && attempt < backoff_ms.len() {
+                    let delay = backoff_ms[attempt];
+                    warn!(
+                        "Tentativa {}/{} falhou ao enviar '{}' para {} (HTTP {}): {} — tentando novamente em {}ms",
+                        attempt + 1,
+                        backoff_ms.len() + 1,
+                        signal_type,
+                        target_id,
+                        status,
+                        resp_body,
+                        delay
+                    );
+                    tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
+                    continue;
+                }
+                anyhow::bail!(
+                    "HTTP {} ao enviar sinal '{}' para {}: {}",
+                    status,
+                    signal_type,
+                    target_id,
+                    resp_body
+                );
+            }
+            Err(err) => {
+                if attempt < backoff_ms.len() {
+                    let delay = backoff_ms[attempt];
+                    warn!(
+                        "Tentativa {}/{} falhou ao enviar '{}' para {} ({}) — tentando novamente em {}ms",
+                        attempt + 1,
+                        backoff_ms.len() + 1,
+                        signal_type,
+                        target_id,
+                        err,
+                        delay
+                    );
+                    tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
+                    continue;
+                }
+                return Err(err.into());
+            }
+        }
+    }
+
+    unreachable!()
 }
 
 pub async fn poll_sse_loop(

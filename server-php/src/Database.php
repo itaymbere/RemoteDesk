@@ -15,11 +15,22 @@ final class Database
         $this->pdo = new PDO('sqlite:' . $dbPath, null, null, [
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_TIMEOUT => 15,
         ]);
 
-        $this->pdo->exec('PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;');
+        $this->pdo->exec('PRAGMA busy_timeout = 15000; PRAGMA synchronous = NORMAL;');
 
-        $this->migrate();
+        $journalMode = strtolower((string) $this->pdo->query('PRAGMA journal_mode')->fetchColumn());
+        if ($journalMode !== 'wal') {
+            $this->pdo->exec('PRAGMA journal_mode = WAL;');
+        }
+
+        $tableCount = (int) $this->pdo->query(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('users', 'hosts', 'signals')"
+        )->fetchColumn();
+        if ($tableCount < 3) {
+            $this->migrate();
+        }
     }
 
     public function pdo(): PDO
