@@ -10,7 +10,12 @@ Alternativa Open Source ao AnyDesk baseada em **WebRTC + Cliente Web** com sinal
   - Sinalização via REST + Server-Sent Events (`server-php/public/api.php`).
   - Geração de credenciais temporárias para STUN/TURN (`coturn` com `use-auth-secret`).
 - **Agente Host (`agent/`):**
-  - Codebase único em Rust para **Debian 13**, **macOS 27 Golden Gate** e **Windows 10** (planejado).
+  - Codebase único em Rust para **Debian 13** (X11/Wayland), **macOS 27 Golden Gate** e **Windows 10**.
+  - Arquivos de serviço `systemd` e `launchd` em `agent/deploy/`.
+- **Mobile (`android-agent/` e `ios-agent/`):**
+  - **Cliente Web (Android/iOS):** suporte nativo a toque (`touchstart`, `touchmove`, `touchend`) direto no navegador.
+  - **Android Host (`android-agent/`):** captura via `MediaProjection` e controle via `AccessibilityService` (sem root).
+  - **iOS Host (`ios-agent/`):** compartilhamento de tela via `ReplayKit` (`RPBroadcastSampleHandler`) + `WebRTC` (apenas visualização, devido às restrições da Apple).
 
 ## Requisitos por Sistema Operacional
 
