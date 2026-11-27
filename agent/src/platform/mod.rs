@@ -6,6 +6,8 @@ use webrtc::track::track_local::track_local_static_sample::TrackLocalStaticSampl
 mod linux;
 #[cfg(target_os = "macos")]
 mod macos;
+#[cfg(target_os = "windows")]
+mod windows;
 
 pub async fn stream_screen(video_track: Arc<TrackLocalStaticSample>) -> Result<()> {
     #[cfg(target_os = "linux")]
@@ -14,7 +16,10 @@ pub async fn stream_screen(video_track: Arc<TrackLocalStaticSample>) -> Result<(
     #[cfg(target_os = "macos")]
     return macos::stream_screen(video_track).await;
 
-    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    #[cfg(target_os = "windows")]
+    return windows::stream_screen(video_track).await;
+
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
     anyhow::bail!("Sistema operacional não suportado");
 }
 
@@ -25,6 +30,9 @@ pub fn inject_input(event_json: &str) -> Result<()> {
     #[cfg(target_os = "macos")]
     return macos::inject_input(event_json);
 
-    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    #[cfg(target_os = "windows")]
+    return windows::inject_input(event_json);
+
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
     anyhow::bail!("Sistema operacional não suportado");
 }
