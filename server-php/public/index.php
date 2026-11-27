@@ -11,7 +11,7 @@ $loggedIn = !empty($_SESSION['user']);
   <title>RemoteDeskIT</title>
   <style>
     body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; padding: 24px; }
-    .card { max-width: 960px; margin: 0 auto; background: #1e293b; border-radius: 12px; padding: 20px; }
+    .card { max-width: 96vw; margin: 0 auto; background: #1e293b; border-radius: 12px; padding: 20px; }
     input, button { padding: 10px 14px; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: #f8fafc; }
     button { background: #3b82f6; border-color: #3b82f6; cursor: pointer; font-weight: 600; }
     button:hover { background: #2563eb; }
@@ -52,11 +52,21 @@ $loggedIn = !empty($_SESSION['user']);
       </div>
 
       <div class="hosts" id="hosts-list">Carregando hosts...</div>
-      <p id="status" style="color:#94a3b8; margin-top:12px;">Pronto para conectar.</p>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+        <p id="status" style="color:#94a3b8; margin:0;">Pronto para conectar.</p>
+        <button id="fullscreen-btn" style="background:#334155; border-color:#334155;">Tela Cheia</button>
+      </div>
 
       <div id="client-cfg-panel" style="display:none; margin-top:12px; padding:16px; background:#0f172a; border-radius:8px;">
         <h3 style="margin-top:0;">Configuração do Cliente Remoto</h3>
         <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+          <select id="cli-quality" style="padding:10px 14px; border-radius:8px; border:1px solid #334155; background:#0f172a; color:#f8fafc;">
+            <option value="">Qualidade (preset)</option>
+            <option value="800k">Baixa (800k)</option>
+            <option value="1500k">Média (1500k)</option>
+            <option value="4000k">Alta (4000k)</option>
+            <option value="8000k">Ultra (8000k)</option>
+          </select>
           <input type="number" id="cli-fps" placeholder="FPS (ex: 15)" value="15" style="width:110px;">
           <input type="text" id="cli-bitrate" placeholder="Bitrate (ex: 1500k)" value="1500k" style="width:140px;">
           <input type="text" id="cli-name" placeholder="Nome do Host">
@@ -106,7 +116,17 @@ $loggedIn = !empty($_SESSION['user']);
         }
       };
 
+      document.getElementById('fullscreen-btn').addEventListener('click', () => {
+        const v = document.getElementById('remote-video');
+        if (v.requestFullscreen) v.requestFullscreen();
+        else if (v.webkitRequestFullscreen) v.webkitRequestFullscreen();
+      });
+
+      let lastMove = 0;
       videoEl.addEventListener('mousemove', (e) => {
+        const now = performance.now();
+        if (now - lastMove < 30) return;
+        lastMove = now;
         const rect = videoEl.getBoundingClientRect();
         sendInput({
           type: 'mousemove',
@@ -182,6 +202,12 @@ $loggedIn = !empty($_SESSION['user']);
         if (res.ok) {
           document.getElementById('status').textContent = 'Configuração do servidor salva.';
           document.getElementById('server-cfg-panel').style.display = 'none';
+        }
+      });
+
+      document.getElementById('cli-quality').addEventListener('change', (e) => {
+        if (e.target.value) {
+          document.getElementById('cli-bitrate').value = e.target.value;
         }
       });
 

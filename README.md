@@ -124,14 +124,20 @@ SERVER_URL="http://<IP_DO_SERVIDOR>:8080/api.php" HOST_ID="macos-host-01" HOST_N
    launchctl load -w ~/Library/LaunchAgents/com.agremotedesk.agent.plist
    ```
 
-### Execução no Windows 10 (PowerShell)
+### Execução no Windows 10 / 11 (PowerShell)
 
-1. Compile o binário em release:
+1. Instale os pré-requisitos:
    ```powershell
-   cd agent
+   winget install Git.Git Rustlang.Rustup Gyan.FFmpeg
+   ```
+   *(Feche e reabra o PowerShell após instalar para atualizar o `PATH`.)*
+2. Clone o repositório e compile o binário em release:
+   ```powershell
+   git clone -b v0.0.1 https://github.com/itaymbere/RemoteDesk.git
+   cd RemoteDesk\agent
    cargo build --release
    ```
-2. Execute definindo as variáveis de ambiente:
+3. Execute definindo as variáveis de ambiente:
    ```powershell
    $env:SERVER_URL="http://IP_DO_SERVIDOR:8080/api.php"
    $env:HOST_ID="windows-host-01"

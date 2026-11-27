@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 
+date_default_timezone_set(getenv('APP_TZ') ?: 'America/Sao_Paulo');
 session_start();
 header('Content-Type: application/json; charset=utf-8');
 
@@ -29,6 +30,12 @@ $pdo = $db->pdo();
 
 $action = $_GET['action'] ?? '';
 $input = json_decode(file_get_contents('php://input') ?: '[]', true) ?: [];
+
+function logEvent(string $msg): void
+{
+    $line = '[' . date('Y-m-d H:i:s') . '] ' . $msg . PHP_EOL;
+    @file_put_contents(__DIR__ . '/../data/server.log', $line, FILE_APPEND);
+}
 
 function jsonResponse(array $data, int $status = 200): never
 {
@@ -170,6 +177,7 @@ switch ($action) {
             'INSERT INTO signals (target_id, sender_id, type, payload, created_at) VALUES (?, ?, ?, ?, ?)'
         );
         $stmt->execute([$targetId, $senderId, $type, $payload, time()]);
+        logEvent("SIGNAL {$type} from={$senderId} to={$targetId}");
 
         // Limpeza periódica de sinais antigos (> 2 min) apenas ao iniciar nova oferta
         if ($type === 'offer') {

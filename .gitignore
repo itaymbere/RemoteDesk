@@ -1,3 +1,4 @@
 agent/target/
 server-php/data/*.sqlite
+server-php/data/*.log
 .envrc
