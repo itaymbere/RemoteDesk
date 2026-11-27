@@ -13,7 +13,7 @@ O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.
 - Agente Host multiplataforma em Rust (`agent/` com `webrtc-rs`) (`c9e2c33`, `4e80675`):
   - **Debian 13:** captura X11 (`x11grab`) / Wayland (`pipewire`) e injeção de entrada (`xdotool` / `ydotool`) (`218583f`, `65fc475`, `3c1d54a`).
   - **macOS 27 Golden Gate:** captura (`avfoundation`) com detecção automática de dispositivo (`2dd8851`) e entrada (`cliclick` / `osascript`) (`7dd6664`).
-  - **Windows 10 / 11:** captura (`gdigrab`), entrada (`PowerShell` / `user32.dll`) (`f26a502`), guia `winget` com Visual Studio Build Tools no `README.md` (`d2a252c`), inicializador `start-windows.cmd` (`7f401fd`, `4a68c3c`) e script de build com auto-instalação do linker C++ `build-windows.cmd` (`f0ef3a2`).
+  - **Windows 10 / 11:** captura (`gdigrab`), entrada (`PowerShell` / `user32.dll`) (`f26a502`), guia `winget` com Visual Studio Build Tools no `README.md` (`d2a252c`), inicializador `start-windows.cmd` (`7f401fd`, `4a68c3c`, `de1d48a`) e script de build com auto-instalação do `cl.exe` / VS Build Tools `build-windows.cmd` (`f0ef3a2`, `b6fc593`, `c133037`).
   - Arquivos de serviço para `systemd` (Debian) e `launchd` (macOS) em `agent/deploy/` (`007487c`).
 - App **Android Host** em Kotlin (`android-agent/`) com `MediaProjection`, `AccessibilityService`, `webrtc-android` (`f7e709a`) e sinalização SSE (`8705a2f`).
 - App **iOS Screen-Sharing Host** em Swift (`ios-agent/`) com `ReplayKit` (`RPBroadcastSampleHandler`), `WebRTC` (`322d436`) e sinalização SSE (`8705a2f`).
