@@ -70,10 +70,38 @@ pub async fn create_peer_for_offer(
         .await?;
 
     // Recebe DataChannel ("input") do navegador para mouse/teclado
+    let host_name_dc = cfg.host_name.clone();
     pc.on_data_channel(Box::new(move |dc| {
         let label = dc.label().to_owned();
+        let dc_open = Arc::clone(&dc);
+        let host_name = host_name_dc.clone();
         Box::pin(async move {
             info!("DataChannel aberto: {label}");
+            dc.on_open(Box::new(move || {
+                let dc_send = Arc::clone(&dc_open);
+                let host_name = host_name.clone();
+                Box::pin(async move {
+                    let mut fps = 15u64;
+                    let mut bitrate = "1500k".to_string();
+                    let mut name = host_name;
+                    if let Ok(text) = std::fs::read_to_string("agent_config.json") {
+                        if let Ok(v) = serde_json::from_str::<Value>(&text) {
+                            if let Some(f) = v.get("fps").and_then(|x| x.as_u64()) { fps = f; }
+                            if let Some(b) = v.get("bitrate").and_then(|x| x.as_str()) { bitrate = b.to_string(); }
+                            if let Some(n) = v.get("host_name").and_then(|x| x.as_str()) {
+                                if !n.is_empty() { name = n.to_string(); }
+                            }
+                        }
+                    }
+                    let msg = serde_json::json!({
+                        "type": "config_current",
+                        "fps": fps,
+                        "bitrate": bitrate,
+                        "host_name": name,
+                    });
+                    let _ = dc_send.send_text(msg.to_string()).await;
+                })
+            }));
             dc.on_message(Box::new(move |msg| {
                 let data = String::from_utf8_lossy(&msg.data).to_string();
                 Box::pin(async move {

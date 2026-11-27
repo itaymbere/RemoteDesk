@@ -18,5 +18,12 @@ O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.
   - **macOS 27 Golden Gate:** captura (`avfoundation`) e entrada (`cliclick` / `osascript`).
   - **Windows 10:** captura (`gdigrab`) e entrada (`PowerShell` / `user32.dll`).
   - Arquivos de serviço para `systemd` (Debian) e `launchd` (macOS) em `agent/deploy/`.
-- App **Android Host** em Kotlin (`android-agent/`) com `MediaProjection`, `AccessibilityService` e `webrtc-android`.
-- App **iOS Screen-Sharing Host** em Swift (`ios-agent/`) com `ReplayKit` (`RPBroadcastSampleHandler`) e `WebRTC`.
+- App **Android Host** em Kotlin (`android-agent/`) com `MediaProjection`, `AccessibilityService`, `webrtc-android` e sinalização SSE (`api.php?action=poll`).
+- App **iOS Screen-Sharing Host** em Swift (`ios-agent/`) com `ReplayKit` (`RPBroadcastSampleHandler`), `WebRTC` e sinalização SSE.
+- Telas de **Configuração do Servidor** (STUN/TURN) e **Configuração do Cliente Remoto** (FPS, Bitrate, Nome do Host com reinício automático via `DataChannel`).
+- Leitura dinâmica de `fps` e `bitrate` a partir de `agent_config.json` no agente Linux e sincronização automática das configurações atuais (`config_current`) para o navegador ao conectar.
+
+### Corrigido
+- Suporte a candidatos ICE em loopback (`localhost`) no `webrtc-rs`.
+- Redução do framerate padrão para 15 FPS no Linux para menor latência.
+- Adicionado `muted` no `<video>` para compatibilidade com autoplay no Safari.

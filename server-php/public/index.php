@@ -173,6 +173,16 @@ $loggedIn = !empty($_SESSION['user']);
             pc.connectionState === 'connected' ? 'block' : 'none';
         };
         dc = pc.createDataChannel('input');
+        dc.onmessage = (e) => {
+          try {
+            const msg = JSON.parse(e.data);
+            if (msg.type === 'config_current') {
+              document.getElementById('cli-fps').value = msg.fps ?? 15;
+              document.getElementById('cli-bitrate').value = msg.bitrate ?? '1500k';
+              document.getElementById('cli-name').value = msg.host_name ?? '';
+            }
+          } catch (_) {}
+        };
 
         const videoEl = document.getElementById('remote-video');
         const sendInput = (evt) => {

@@ -34,22 +34,49 @@ fn is_wayland() -> bool {
         .unwrap_or(false)
 }
 
+#[derive(Debug, Deserialize)]
+struct AgentVideoConfig {
+    #[serde(default = "default_fps")]
+    fps: u64,
+    #[serde(default = "default_bitrate")]
+    bitrate: String,
+}
+
+fn default_fps() -> u64 { 15 }
+fn default_bitrate() -> String { "1500k".to_string() }
+
+fn load_video_config() -> AgentVideoConfig {
+    if let Ok(text) = std::fs::read_to_string("agent_config.json") {
+        if let Ok(cfg) = serde_json::from_str::<AgentVideoConfig>(&text) {
+            return cfg;
+        }
+    }
+    AgentVideoConfig {
+        fps: default_fps(),
+        bitrate: default_bitrate(),
+    }
+}
+
 /// Captura de tela no Debian 13 (Wayland via PipeWire/ffmpeg ou X11 via x11grab -> VP8 IVF).
 pub async fn stream_screen(video_track: Arc<TrackLocalStaticSample>) -> Result<()> {
+    let vcfg = load_video_config();
+    let fps_str = vcfg.fps.clamp(1, 60).to_string();
+    let frame_duration = Duration::from_millis(1000 / vcfg.fps.clamp(1, 60));
+
     let mut cmd = TokioCommand::new("ffmpeg");
     if is_wayland() {
-        info!("Iniciando captura Wayland (PipeWire) via ffmpeg -> VP8...");
+        info!("Iniciando captura Wayland (PipeWire, {}fps) via ffmpeg -> VP8...", fps_str);
         cmd.args([
             "-f", "pipewire",
-            "-framerate", "15",
+            "-framerate", &fps_str,
             "-i", "0",
         ]);
     } else {
         let x11_display = env::var("DISPLAY").unwrap_or_else(|_| ":0.0".to_string());
-        info!("Iniciando captura X11 ({}) via ffmpeg -> VP8...", x11_display);
+        info!("Iniciando captura X11 ({}, {}fps) via ffmpeg -> VP8...", x11_display, fps_str);
         cmd.args([
             "-f", "x11grab",
-            "-framerate", "15",
+            "-framerate", &fps_str,
             "-i", &x11_display,
         ]);
     }
@@ -57,7 +84,7 @@ pub async fn stream_screen(video_track: Arc<TrackLocalStaticSample>) -> Result<(
     let mut child = cmd
         .args([
             "-c:v", "libvpx",
-            "-b:v", "1500k",
+            "-b:v", &vcfg.bitrate,
             "-deadline", "realtime",
             "-cpu-used", "8",
             "-f", "ivf",
@@ -90,7 +117,7 @@ pub async fn stream_screen(video_track: Arc<TrackLocalStaticSample>) -> Result<(
 
         let sample = Sample {
             data: Bytes::from(frame_data),
-            duration: Duration::from_millis(66),
+            duration: frame_duration,
             ..Default::default()
         };
 
