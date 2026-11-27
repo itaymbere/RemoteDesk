@@ -5,6 +5,13 @@ session_start();
 header('Content-Type: application/json; charset=utf-8');
 
 $config = require __DIR__ . '/../config.php';
+$overrideFile = __DIR__ . '/../data/server_config.json';
+if (is_file($overrideFile)) {
+    $overrides = json_decode(file_get_contents($overrideFile) ?: '{}', true);
+    if (is_array($overrides)) {
+        $config = array_merge($config, $overrides);
+    }
+}
 require __DIR__ . '/../src/Database.php';
 
 $db = new Database($config['db_path']);
@@ -79,6 +86,31 @@ switch ($action) {
         $stmt = $pdo->prepare('SELECT host_id, name, os, last_seen FROM hosts WHERE last_seen >= ? ORDER BY name');
         $stmt->execute([$cutoff]);
         jsonResponse(['hosts' => $stmt->fetchAll()]);
+
+    case 'server_config':
+        requireUser();
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $newCfg = [
+                'stun_urls' => array_values(array_filter(array_map('trim', (array) ($input['stun_urls'] ?? $config['stun_urls'])))),
+                'turn_urls' => array_values(array_filter(array_map('trim', (array) ($input['turn_urls'] ?? $config['turn_urls'])))),
+                'turn_ttl' => max(60, (int) ($input['turn_ttl'] ?? $config['turn_ttl'])),
+            ];
+            if (isset($input['turn_secret']) && $input['turn_secret'] !== '') {
+                $newCfg['turn_secret'] = (string) $input['turn_secret'];
+            }
+            $dir = dirname($overrideFile);
+            if (!is_dir($dir)) {
+                mkdir($dir, 0750, true);
+            }
+            file_put_contents($overrideFile, json_encode($newCfg, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+            jsonResponse(['ok' => true]);
+        }
+        jsonResponse([
+            'stun_urls' => $config['stun_urls'],
+            'turn_urls' => $config['turn_urls'],
+            'turn_ttl' => $config['turn_ttl'],
+            'has_turn_secret' => $config['turn_secret'] !== '',
+        ]);
 
     case 'ice_servers':
         requireUser();

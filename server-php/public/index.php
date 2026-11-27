@@ -34,11 +34,36 @@ $loggedIn = !empty($_SESSION['user']);
     <?php else: ?>
       <div style="display:flex; justify-content:space-between; align-items:center;">
         <span>Conectado como <strong><?= htmlspecialchars((string) $_SESSION['user']) ?></strong></span>
-        <button id="logout-btn" style="background:#475569; border-color:#475569;">Sair</button>
+        <div style="display:flex; gap:8px;">
+          <button id="toggle-server-cfg" style="background:#334155; border-color:#334155;">Config. Servidor</button>
+          <button id="logout-btn" style="background:#475569; border-color:#475569;">Sair</button>
+        </div>
+      </div>
+
+      <div id="server-cfg-panel" style="display:none; margin-top:16px; padding:16px; background:#0f172a; border-radius:8px;">
+        <h3 style="margin-top:0;">Configuração do Servidor</h3>
+        <div style="display:grid; gap:8px;">
+          <input type="text" id="cfg-stun" placeholder="STUN URLs (separadas por vírgula)">
+          <input type="text" id="cfg-turn" placeholder="TURN URLs (ex: turn:seu-servidor.com:3478?transport=udp, turns:seu-servidor.com:5349?transport=tcp)">
+          <input type="password" id="cfg-turn-secret" placeholder="TURN Secret (deixe vazio para manter)">
+          <input type="number" id="cfg-turn-ttl" placeholder="TURN TTL (segundos)" value="3600">
+          <button id="save-server-cfg">Salvar Servidor</button>
+        </div>
       </div>
 
       <div class="hosts" id="hosts-list">Carregando hosts...</div>
       <p id="status" style="color:#94a3b8; margin-top:12px;">Pronto para conectar.</p>
+
+      <div id="client-cfg-panel" style="display:none; margin-top:12px; padding:16px; background:#0f172a; border-radius:8px;">
+        <h3 style="margin-top:0;">Configuração do Cliente Remoto</h3>
+        <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+          <input type="number" id="cli-fps" placeholder="FPS (ex: 15)" value="15" style="width:110px;">
+          <input type="text" id="cli-bitrate" placeholder="Bitrate (ex: 1500k)" value="1500k" style="width:140px;">
+          <input type="text" id="cli-name" placeholder="Nome do Host">
+          <button id="send-client-cfg">Aplicar e Reiniciar Cliente</button>
+        </div>
+      </div>
+
       <video id="remote-video" autoplay playsinline muted tabindex="0"></video>
     <?php endif; ?>
   </div>
@@ -72,6 +97,47 @@ $loggedIn = !empty($_SESSION['user']);
       let dc = null;
       let currentHostId = null;
 
+      document.getElementById('toggle-server-cfg').addEventListener('click', async () => {
+        const panel = document.getElementById('server-cfg-panel');
+        const show = panel.style.display === 'none';
+        panel.style.display = show ? 'block' : 'none';
+        if (show) {
+          const res = await fetch('api.php?action=server_config');
+          const cfg = await res.json();
+          document.getElementById('cfg-stun').value = (cfg.stun_urls || []).join(', ');
+          document.getElementById('cfg-turn').value = (cfg.turn_urls || []).join(', ');
+          document.getElementById('cfg-turn-ttl').value = cfg.turn_ttl || 3600;
+        }
+      });
+
+      document.getElementById('save-server-cfg').addEventListener('click', async () => {
+        const res = await fetch('api.php?action=server_config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            stun_urls: document.getElementById('cfg-stun').value.split(','),
+            turn_urls: document.getElementById('cfg-turn').value.split(','),
+            turn_secret: document.getElementById('cfg-turn-secret').value,
+            turn_ttl: Number(document.getElementById('cfg-turn-ttl').value || 3600),
+          }),
+        });
+        if (res.ok) {
+          document.getElementById('status').textContent = 'Configuração do servidor salva.';
+          document.getElementById('server-cfg-panel').style.display = 'none';
+        }
+      });
+
+      document.getElementById('send-client-cfg').addEventListener('click', () => {
+        if (!dc || dc.readyState !== 'open') return;
+        dc.send(JSON.stringify({
+          type: 'config',
+          fps: Number(document.getElementById('cli-fps').value || 15),
+          bitrate: document.getElementById('cli-bitrate').value || '1500k',
+          host_name: document.getElementById('cli-name').value || '',
+        }));
+        document.getElementById('status').textContent = 'Configuração enviada! O cliente será reiniciado para reconexão.';
+      });
+
       async function loadHosts() {
         const res = await fetch('api.php?action=hosts');
         const data = await res.json();
@@ -103,6 +169,8 @@ $loggedIn = !empty($_SESSION['user']);
         pc = new RTCPeerConnection({ iceServers });
         pc.onconnectionstatechange = () => {
           statusEl.textContent = 'WebRTC: ' + pc.connectionState;
+          document.getElementById('client-cfg-panel').style.display =
+            pc.connectionState === 'connected' ? 'block' : 'none';
         };
         dc = pc.createDataChannel('input');
 

@@ -77,6 +77,14 @@ pub async fn create_peer_for_offer(
             dc.on_message(Box::new(move |msg| {
                 let data = String::from_utf8_lossy(&msg.data).to_string();
                 Box::pin(async move {
+                    if let Ok(val) = serde_json::from_str::<Value>(&data) {
+                        if val.get("type").and_then(|v| v.as_str()) == Some("config") {
+                            info!("Nova configuração recebida do servidor: {data}");
+                            let _ = std::fs::write("agent_config.json", &data);
+                            info!("Reiniciando agente para aplicar configuração...");
+                            std::process::exit(0);
+                        }
+                    }
                     if let Err(e) = platform::inject_input(&data) {
                         warn!("Erro ao injetar input: {e}");
                     }
