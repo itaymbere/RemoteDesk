@@ -34,22 +34,28 @@ fn is_wayland() -> bool {
         .unwrap_or(false)
 }
 
-/// Captura de tela no Debian 13 (X11 via ffmpeg x11grab -> VP8 IVF; gancho para Wayland).
+/// Captura de tela no Debian 13 (Wayland via PipeWire/ffmpeg ou X11 via x11grab -> VP8 IVF).
 pub async fn stream_screen(video_track: Arc<TrackLocalStaticSample>) -> Result<()> {
+    let mut cmd = TokioCommand::new("ffmpeg");
     if is_wayland() {
-        warn!("Sessão Wayland detectada: captura via PipeWire ainda não implementada.");
-        tokio::time::sleep(Duration::from_secs(3600)).await;
-        return Ok(());
-    }
-
-    let x11_display = env::var("DISPLAY").unwrap_or_else(|_| ":0.0".to_string());
-    info!("Iniciando captura X11 ({}) via ffmpeg -> VP8...", x11_display);
-
-    let mut child = TokioCommand::new("ffmpeg")
-        .args([
+        info!("Iniciando captura Wayland (PipeWire) via ffmpeg -> VP8...");
+        cmd.args([
+            "-f", "pipewire",
+            "-framerate", "30",
+            "-i", "0",
+        ]);
+    } else {
+        let x11_display = env::var("DISPLAY").unwrap_or_else(|_| ":0.0".to_string());
+        info!("Iniciando captura X11 ({}) via ffmpeg -> VP8...", x11_display);
+        cmd.args([
             "-f", "x11grab",
             "-framerate", "30",
             "-i", &x11_display,
+        ]);
+    }
+
+    let mut child = cmd
+        .args([
             "-c:v", "libvpx",
             "-b:v", "1500k",
             "-deadline", "realtime",
@@ -141,13 +147,36 @@ fn map_browser_key(key: &str) -> &str {
     }
 }
 
-/// Injeção de mouse/teclado no Debian 13 (X11 via xdotool; gancho para Wayland).
+/// Injeção de mouse/teclado no Debian 13 (Wayland via ydotool/uinput ou X11 via xdotool).
 pub fn inject_input(event_json: &str) -> Result<()> {
+    let evt: InputEvent = serde_json::from_str(event_json)?;
+
     if is_wayland() {
+        match evt {
+            InputEvent::MouseMove { x, y } => {
+                let (w, h) = screen_resolution();
+                let px = (x.clamp(0.0, 1.0) * w) as i32;
+                let py = (y.clamp(0.0, 1.0) * h) as i32;
+                let _ = Command::new("ydotool")
+                    .args(["mousemove", "--absolute", "-x", &px.to_string(), "-y", &py.to_string()])
+                    .spawn();
+            }
+            InputEvent::MouseDown { button } => {
+                let code = match button { 2 => "0x41", _ => "0x40" };
+                let _ = Command::new("ydotool").args(["click", code]).spawn();
+            }
+            InputEvent::MouseUp { .. } => {}
+            InputEvent::Wheel { delta_y } => {
+                let val = if delta_y < 0.0 { "1" } else { "-1" };
+                let _ = Command::new("ydotool").args(["mousemove", "--wheel", "-y", val]).spawn();
+            }
+            InputEvent::KeyDown { key } => {
+                let _ = Command::new("ydotool").args(["type", &key]).spawn();
+            }
+            InputEvent::KeyUp { .. } => {}
+        }
         return Ok(());
     }
-
-    let evt: InputEvent = serde_json::from_str(event_json)?;
     match evt {
         InputEvent::MouseMove { x, y } => {
             let (w, h) = screen_resolution();

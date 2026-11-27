@@ -20,11 +20,11 @@ Alternativa Open Source ao AnyDesk baseada em **WebRTC + Cliente Web** com sinal
 - HTTPS em produção (obrigatório para WebRTC)
 - `coturn` (opcional, para NAT traversal via TURN)
 
-### Agente — Debian 13 (X11)
+### Agente — Debian 13 (X11 / Wayland)
 - Rust / Cargo (para compilar)
-- `ffmpeg` e `xdotool`:
+- `ffmpeg`, `xdotool` (para X11) e `ydotool` (para Wayland):
   ```bash
-  sudo apt install -y ffmpeg xdotool
+  sudo apt install -y ffmpeg xdotool ydotool
   ```
 
 ### Agente — macOS 27 Golden Gate
