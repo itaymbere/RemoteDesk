@@ -137,7 +137,7 @@ SERVER_URL="http://<IP_DO_SERVIDOR>:8080/api.php" HOST_ID="macos-host-01" HOST_N
    cd RemoteDesk\agent
    cargo build --release
    ```
-3. Execute definindo as variáveis de ambiente:
+3. Execute pelo atalho na raiz (`start-windows.cmd`) ou manualmente via PowerShell:
    ```powershell
    $env:SERVER_URL="http://IP_DO_SERVIDOR:8080/api.php"
    $env:HOST_ID="windows-host-01"
