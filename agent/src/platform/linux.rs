@@ -3,7 +3,7 @@ use bytes::Bytes;
 use serde::Deserialize;
 use std::env;
 use std::process::Command;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use tokio::io::AsyncReadExt;
 use tokio::process::Command as TokioCommand;
@@ -98,6 +98,49 @@ pub async fn stream_screen(video_track: Arc<TrackLocalStaticSample>) -> Result<(
     Ok(())
 }
 
+fn screen_resolution() -> (f64, f64) {
+    static RES: OnceLock<(f64, f64)> = OnceLock::new();
+    *RES.get_or_init(|| {
+        if let Ok(out) = Command::new("xdotool").arg("getdisplaygeometry").output() {
+            let text = String::from_utf8_lossy(&out.stdout);
+            let mut parts = text.split_whitespace();
+            if let (Some(w), Some(h)) = (
+                parts.next().and_then(|s| s.parse::<f64>().ok()),
+                parts.next().and_then(|s| s.parse::<f64>().ok()),
+            ) {
+                return (w, h);
+            }
+        }
+        (1920.0, 1080.0)
+    })
+}
+
+fn map_browser_key(key: &str) -> &str {
+    match key {
+        "Enter" => "Return",
+        "Backspace" => "BackSpace",
+        "Escape" => "Escape",
+        "Tab" => "Tab",
+        " " => "space",
+        "Control" => "Control_L",
+        "Shift" => "Shift_L",
+        "Alt" => "Alt_L",
+        "Meta" => "Super_L",
+        "ArrowUp" => "Up",
+        "ArrowDown" => "Down",
+        "ArrowLeft" => "Left",
+        "ArrowRight" => "Right",
+        "Delete" => "Delete",
+        "Home" => "Home",
+        "End" => "End",
+        "PageUp" => "Page_Up",
+        "PageDown" => "Page_Down",
+        "CapsLock" => "Caps_Lock",
+        "Insert" => "Insert",
+        other => other,
+    }
+}
+
 /// Injeção de mouse/teclado no Debian 13 (X11 via xdotool; gancho para Wayland).
 pub fn inject_input(event_json: &str) -> Result<()> {
     if is_wayland() {
@@ -107,9 +150,9 @@ pub fn inject_input(event_json: &str) -> Result<()> {
     let evt: InputEvent = serde_json::from_str(event_json)?;
     match evt {
         InputEvent::MouseMove { x, y } => {
-            // Coordenadas normalizadas (0..1) -> assume tela 1920x1080 se não consultada
-            let px = (x.clamp(0.0, 1.0) * 1920.0) as i32;
-            let py = (y.clamp(0.0, 1.0) * 1080.0) as i32;
+            let (w, h) = screen_resolution();
+            let px = (x.clamp(0.0, 1.0) * w) as i32;
+            let py = (y.clamp(0.0, 1.0) * h) as i32;
             let _ = Command::new("xdotool")
                 .args(["mousemove", &px.to_string(), &py.to_string()])
                 .spawn();
@@ -127,10 +170,12 @@ pub fn inject_input(event_json: &str) -> Result<()> {
             let _ = Command::new("xdotool").args(["click", btn]).spawn();
         }
         InputEvent::KeyDown { key } => {
-            let _ = Command::new("xdotool").args(["keydown", &key]).spawn();
+            let mapped = map_browser_key(&key);
+            let _ = Command::new("xdotool").args(["keydown", mapped]).spawn();
         }
         InputEvent::KeyUp { key } => {
-            let _ = Command::new("xdotool").args(["keyup", &key]).spawn();
+            let mapped = map_browser_key(&key);
+            let _ = Command::new("xdotool").args(["keyup", mapped]).spawn();
         }
     }
     Ok(())
