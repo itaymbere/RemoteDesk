@@ -41,7 +41,7 @@ pub async fn stream_screen(video_track: Arc<TrackLocalStaticSample>) -> Result<(
         info!("Iniciando captura Wayland (PipeWire) via ffmpeg -> VP8...");
         cmd.args([
             "-f", "pipewire",
-            "-framerate", "30",
+            "-framerate", "15",
             "-i", "0",
         ]);
     } else {
@@ -49,7 +49,7 @@ pub async fn stream_screen(video_track: Arc<TrackLocalStaticSample>) -> Result<(
         info!("Iniciando captura X11 ({}) via ffmpeg -> VP8...", x11_display);
         cmd.args([
             "-f", "x11grab",
-            "-framerate", "30",
+            "-framerate", "15",
             "-i", &x11_display,
         ]);
     }
@@ -90,7 +90,7 @@ pub async fn stream_screen(video_track: Arc<TrackLocalStaticSample>) -> Result<(
 
         let sample = Sample {
             data: Bytes::from(frame_data),
-            duration: Duration::from_millis(33),
+            duration: Duration::from_millis(66),
             ..Default::default()
         };
 

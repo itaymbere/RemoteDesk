@@ -38,7 +38,8 @@ $loggedIn = !empty($_SESSION['user']);
       </div>
 
       <div class="hosts" id="hosts-list">Carregando hosts...</div>
-      <video id="remote-video" autoplay playsinline tabindex="0"></video>
+      <p id="status" style="color:#94a3b8; margin-top:12px;">Pronto para conectar.</p>
+      <video id="remote-video" autoplay playsinline muted tabindex="0"></video>
     <?php endif; ?>
   </div>
 
@@ -93,11 +94,16 @@ $loggedIn = !empty($_SESSION['user']);
       }
 
       async function connectToHost(hostId) {
+        const statusEl = document.getElementById('status');
+        statusEl.textContent = 'Conectando a ' + hostId + '...';
         currentHostId = hostId;
         const iceRes = await fetch('api.php?action=ice_servers');
         const { iceServers } = await iceRes.json();
 
         pc = new RTCPeerConnection({ iceServers });
+        pc.onconnectionstatechange = () => {
+          statusEl.textContent = 'WebRTC: ' + pc.connectionState;
+        };
         dc = pc.createDataChannel('input');
 
         const videoEl = document.getElementById('remote-video');
@@ -170,6 +176,8 @@ $loggedIn = !empty($_SESSION['user']);
           }
         };
 
+        startSSE();
+
         const offer = await pc.createOffer({ offerToReceiveVideo: true });
         await pc.setLocalDescription(offer);
         await fetch('api.php?action=signal', {
@@ -177,8 +185,6 @@ $loggedIn = !empty($_SESSION['user']);
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ target_id: hostId, type: 'offer', payload: offer }),
         });
-
-        startSSE();
       }
 
       function startSSE() {
@@ -187,6 +193,7 @@ $loggedIn = !empty($_SESSION['user']);
           const msg = JSON.parse(e.data);
           if (!pc || msg.sender_id !== currentHostId) return;
           if (msg.type === 'answer') {
+            document.getElementById('status').textContent = 'Answer recebido, negociando ICE...';
             await pc.setRemoteDescription(new RTCSessionDescription(msg.payload));
           } else if (msg.type === 'ice') {
             await pc.addIceCandidate(new RTCIceCandidate(msg.payload));
@@ -195,7 +202,7 @@ $loggedIn = !empty($_SESSION['user']);
       }
 
       loadHosts();
-      setInterval(loadHosts, 10000);
+      setInterval(loadHosts, 30000);
     }
   </script>
 </body>
