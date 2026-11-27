@@ -1,2 +1,3 @@
 agent/target/
 server-php/data/*.sqlite
+.envrc

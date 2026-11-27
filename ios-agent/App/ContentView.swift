@@ -14,7 +14,7 @@ struct BroadcastPickerRepresentable: UIViewRepresentable {
 struct ContentView: View {
     var body: some View {
         VStack(spacing: 20) {
-            Text("Ag-RemoteDesk iOS")
+            Text("RemoteDeskIT iOS")
                 .font(.title2.bold())
             Text("Toque abaixo para iniciar o compartilhamento de tela")
                 .font(.subheadline)

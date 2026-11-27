@@ -213,7 +213,7 @@ class ScreenCaptureService : Service() {
             NotificationChannel(channelId, "Captura de Tela", NotificationManager.IMPORTANCE_LOW)
         )
         val notification = Notification.Builder(this, channelId)
-            .setContentTitle("Ag-RemoteDesk Agent")
+            .setContentTitle("RemoteDeskIT Agent")
             .setContentText("Compartilhamento de tela ativo")
             .setSmallIcon(android.R.drawable.ic_menu_camera)
             .build()

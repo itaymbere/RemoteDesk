@@ -1,5 +1,5 @@
 [Unit]
-Description=Ag-RemoteDesk Agent (Debian 13)
+Description=RemoteDeskIT Agent (Debian 13)
 After=network-online.target graphical-session.target
 Wants=network-online.target
 

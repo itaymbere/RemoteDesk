@@ -7,7 +7,7 @@
 
     <application
         android:allowBackup="true"
-        android:label="Ag-RemoteDesk Agent"
+        android:label="RemoteDeskIT Agent"
         android:theme="@style/Theme.AppCompat.DayNight.DarkActionBar">
 
         <activity

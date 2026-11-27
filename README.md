@@ -1,4 +1,4 @@
-# Ag-RemoteDesk
+# RemoteDeskIT
 
 Alternativa Open Source ao AnyDesk baseada em **WebRTC + Cliente Web** com sinalização em **PHP-FPM** (HTTP/SSE, sem daemons extras) e **Agente Host em Rust (`webrtc-rs`)**.
 
@@ -83,6 +83,26 @@ cargo build --release
 SERVER_URL="http://<IP_DO_SERVIDOR>:8080/api.php" HOST_ID="macos-host-01" HOST_NAME="macOS" HOST_TOKEN="changeme-token" RUST_LOG="info" ./target/release/ag-remotedesk-agent
 ```
 
+### Serviço em segundo plano no Debian 13 (`systemd`)
+
+1. Compile o binário em release e instale-o:
+   ```bash
+   cd agent
+   cargo build --release
+   sudo cp target/release/ag-remotedesk-agent /usr/local/bin/ag-remotedesk-agent
+   ```
+2. Para rodar manualmente o binário compilado:
+   ```bash
+   SERVER_URL=http://localhost:8080/api.php HOST_ID=debian-host-01 HOST_TOKEN=changeme-token /usr/local/bin/ag-remotedesk-agent
+   ```
+3. Ou instale como serviço de usuário (`systemd`):
+   ```bash
+   mkdir -p ~/.config/systemd/user
+   cp agent/deploy/ag-remotedesk-agent.service ~/.config/systemd/user/
+   # Edite SERVER_URL, HOST_ID e HOST_TOKEN no arquivo .service
+   systemctl --user enable --now ag-remotedesk-agent
+   ```
+
 ### Serviço em segundo plano no macOS (`launchd`)
 
 1. Compile o binário em release e instale-o:
@@ -96,6 +116,21 @@ SERVER_URL="http://<IP_DO_SERVIDOR>:8080/api.php" HOST_ID="macos-host-01" HOST_N
    cp agent/deploy/com.agremotedesk.agent.plist ~/Library/LaunchAgents/com.agremotedesk.agent.plist
    # Edite SERVER_URL, HOST_ID e HOST_TOKEN no arquivo plist antes de carregar
    launchctl load -w ~/Library/LaunchAgents/com.agremotedesk.agent.plist
+   ```
+
+### Execução no Windows 10 (PowerShell)
+
+1. Compile o binário em release:
+   ```powershell
+   cd agent
+   cargo build --release
+   ```
+2. Execute definindo as variáveis de ambiente:
+   ```powershell
+   $env:SERVER_URL="http://IP_DO_SERVIDOR:8080/api.php"
+   $env:HOST_ID="windows-host-01"
+   $env:HOST_TOKEN="changeme-token"
+   .\target\release\ag-remotedesk-agent.exe
    ```
 
 ## Changelog

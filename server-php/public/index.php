@@ -8,7 +8,7 @@ $loggedIn = !empty($_SESSION['user']);
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Ag-RemoteDesk</title>
+  <title>RemoteDeskIT</title>
   <style>
     body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; padding: 24px; }
     .card { max-width: 960px; margin: 0 auto; background: #1e293b; border-radius: 12px; padding: 20px; }
@@ -22,7 +22,7 @@ $loggedIn = !empty($_SESSION['user']);
 </head>
 <body>
   <div class="card">
-    <h1>Ag-RemoteDesk</h1>
+    <h1>RemoteDeskIT</h1>
 
     <?php if (!$loggedIn): ?>
       <form id="login-form">

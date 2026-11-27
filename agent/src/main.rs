@@ -18,7 +18,7 @@ async fn main() {
     let http = reqwest::Client::new();
 
     info!(
-        "Iniciando Ag-RemoteDesk Agent | host_id={} | os={}",
+        "Iniciando RemoteDeskIT Agent | host_id={} | os={}",
         cfg.host_id,
         Config::os_name()
     );
