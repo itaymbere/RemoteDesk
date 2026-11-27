@@ -145,6 +145,18 @@ SERVER_URL="http://<IP_DO_SERVIDOR>:8080/api.php" HOST_ID="macos-host-01" HOST_N
    .\target\release\ag-remotedesk-agent.exe
    ```
 
+### Sincronização automática entre ambientes (Dev)
+
+- Ao abrir o workspace, `.vscode/tasks.json` executa `git pull --ff-only` automaticamente.
+- Para bloquear commits quando houver alterações remotas pendentes, ative o hook `pre-commit` em cada máquina:
+  ```bash
+  git config core.hooksPath scripts/hooks
+  ```
+- Para sincronização contínua em segundo plano:
+  ```bash
+  ./scripts/auto-sync.sh
+  ```
+
 ## Changelog
 
 Veja [CHANGELOG.md](CHANGELOG.md).
