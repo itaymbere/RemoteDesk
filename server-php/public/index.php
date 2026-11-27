@@ -17,7 +17,7 @@ $loggedIn = !empty($_SESSION['user']);
     button:hover { background: #2563eb; }
     .hosts { display: grid; gap: 12px; margin-top: 16px; }
     .host-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #0f172a; border-radius: 8px; }
-    video { width: 100%; background: #000; border-radius: 8px; margin-top: 16px; outline: none; }
+    video { width: 100%; background: #000; border-radius: 8px; margin-top: 16px; outline: none; touch-action: none; }
   </style>
 </head>
 <body>
@@ -127,6 +127,34 @@ $loggedIn = !empty($_SESSION['user']);
           e.preventDefault();
           sendInput({ type: 'keyup', key: e.key });
         });
+
+        const touchCoords = (touch) => {
+          const rect = videoEl.getBoundingClientRect();
+          return {
+            x: (touch.clientX - rect.left) / rect.width,
+            y: (touch.clientY - rect.top) / rect.height,
+          };
+        };
+
+        videoEl.addEventListener('touchstart', (e) => {
+          if (e.touches.length === 0) return;
+          e.preventDefault();
+          const { x, y } = touchCoords(e.touches[0]);
+          sendInput({ type: 'mousemove', x, y });
+          sendInput({ type: 'mousedown', button: 0 });
+        }, { passive: false });
+
+        videoEl.addEventListener('touchmove', (e) => {
+          if (e.touches.length === 0) return;
+          e.preventDefault();
+          const { x, y } = touchCoords(e.touches[0]);
+          sendInput({ type: 'mousemove', x, y });
+        }, { passive: false });
+
+        videoEl.addEventListener('touchend', (e) => {
+          e.preventDefault();
+          sendInput({ type: 'mouseup', button: 0 });
+        }, { passive: false });
 
         pc.ontrack = (e) => {
           document.getElementById('remote-video').srcObject = e.streams[0];
