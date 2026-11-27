@@ -129,6 +129,7 @@ SERVER_URL="http://<IP_DO_SERVIDOR>:8080/api.php" HOST_ID="macos-host-01" HOST_N
 1. Instale os pré-requisitos:
    ```powershell
    winget install Git.Git Rustlang.Rustup Gyan.FFmpeg
+   winget install Microsoft.VisualStudio.2022.BuildTools --override "--quiet --wait --norestart --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
    ```
    *(Feche e reabra o PowerShell após instalar para atualizar o `PATH`.)*
 2. Clone o repositório e compile o binário em release (ou use `build-windows.cmd` na raiz):
