@@ -62,9 +62,9 @@ Configuradas em `agent/src/config.rs` (e captura macOS em `agent/src/platform/ma
 
 ## Como executar localmente
 
-1. Suba o servidor PHP:
+1. Suba o servidor PHP (com múltiplos workers para o SSE não bloquear a sinalização):
    ```bash
-   php -S 0.0.0.0:8080 -t server-php/public
+   PHP_CLI_SERVER_WORKERS=8 php -S 0.0.0.0:8080 -t server-php/public
    ```
 2. Rode o agente na máquina alvo (ou aponte `SERVER_URL` para seu servidor remoto):
    ```bash

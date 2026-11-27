@@ -184,11 +184,30 @@ switch ($action) {
             jsonResponse(['error' => 'Não autenticado'], 401);
         }
 
+        session_write_close();
+
         header('Content-Type: text/event-stream');
         header('Cache-Control: no-cache');
         header('X-Accel-Buffering: no');
 
-        $lastId = (int) ($_GET['last_id'] ?? 0);
+        if (isset($_GET['last_id'])) {
+            $lastId = (int) $_GET['last_id'];
+        } elseif (isset($_SERVER['HTTP_LAST_EVENT_ID']) && (int) $_SERVER['HTTP_LAST_EVENT_ID'] > 0) {
+            $lastId = (int) $_SERVER['HTTP_LAST_EVENT_ID'];
+        } elseif (!empty($_GET['since_now'])) {
+            $lastId = (int) $pdo->query('SELECT COALESCE(MAX(id), 0) FROM signals')->fetchColumn();
+        } else {
+            $lastId = 0;
+        }
+
+        echo "id: {$lastId}\n";
+        echo "event: ready\n";
+        echo "data: {}\n\n";
+        if (ob_get_level() > 0) {
+            ob_flush();
+        }
+        flush();
+
         $end = time() + 25; // Encerra antes do timeout padrão do PHP-FPM
 
         while (time() < $end) {

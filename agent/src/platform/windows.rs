@@ -69,6 +69,7 @@ pub async fn stream_screen(video_track: Arc<TrackLocalStaticSample>) -> Result<(
         ])
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
+        .kill_on_drop(true)
         .spawn()
         .context("Falha ao iniciar ffmpeg (verifique se está no PATH)")?;
 

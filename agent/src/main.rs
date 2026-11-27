@@ -50,6 +50,9 @@ async fn main() {
         match msg.signal_type.as_str() {
             "offer" => {
                 info!("Offer recebido de {}", msg.sender_id);
+                if let Some(old) = peers.remove(&msg.sender_id) {
+                    old.close().await;
+                }
                 match webrtc_peer::create_peer_for_offer(
                     http.clone(),
                     cfg.clone(),

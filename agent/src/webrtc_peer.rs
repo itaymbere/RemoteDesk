@@ -24,6 +24,16 @@ use crate::signaling;
 
 pub struct PeerSession {
     pub pc: Arc<RTCPeerConnection>,
+    stop_tx: tokio::sync::watch::Sender<bool>,
+    capture_task: tokio::task::JoinHandle<()>,
+}
+
+impl PeerSession {
+    pub async fn close(self) {
+        let _ = self.stop_tx.send(true);
+        self.capture_task.abort();
+        let _ = self.pc.close().await;
+    }
 }
 
 pub async fn create_peer_for_offer(
@@ -140,6 +150,8 @@ pub async fn create_peer_for_offer(
         })
     }));
 
+    let (stop_tx, mut stop_rx) = tokio::sync::watch::channel(false);
+    let stop_tx_state = stop_tx.clone();
     pc.on_peer_connection_state_change(Box::new(move |state| {
         info!("Estado da conexão WebRTC: {state}");
         if matches!(
@@ -149,6 +161,7 @@ pub async fn create_peer_for_offer(
                 | RTCPeerConnectionState::Closed
         ) {
             warn!("Sessão WebRTC encerrada ({state})");
+            let _ = stop_tx_state.send(true);
         }
         Box::pin(async {})
     }));
@@ -164,13 +177,24 @@ pub async fn create_peer_for_offer(
     info!("Answer enviado para {client_id}");
 
     // Inicia loop de captura de tela em background
-    tokio::spawn(async move {
-        if let Err(e) = platform::stream_screen(video_track).await {
-            warn!("Captura de tela encerrada: {e}");
+    let capture_task = tokio::spawn(async move {
+        tokio::select! {
+            res = platform::stream_screen(video_track) => {
+                if let Err(e) = res {
+                    warn!("Captura de tela encerrada: {e}");
+                }
+            }
+            _ = stop_rx.wait_for(|&stopped| stopped) => {
+                info!("Captura de tela interrompida pelo encerramento da sessão");
+            }
         }
     });
 
-    Ok(PeerSession { pc })
+    Ok(PeerSession {
+        pc,
+        stop_tx,
+        capture_task,
+    })
 }
 
 pub async fn add_ice_candidate(pc: &RTCPeerConnection, payload: Value) -> Result<()> {

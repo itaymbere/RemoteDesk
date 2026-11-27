@@ -95,7 +95,65 @@ $loggedIn = !empty($_SESSION['user']);
 
       let pc = null;
       let dc = null;
+      let es = null;
       let currentHostId = null;
+      let pendingIce = [];
+
+      const videoEl = document.getElementById('remote-video');
+      const sendInput = (evt) => {
+        if (dc && dc.readyState === 'open') {
+          dc.send(JSON.stringify(evt));
+        }
+      };
+
+      videoEl.addEventListener('mousemove', (e) => {
+        const rect = videoEl.getBoundingClientRect();
+        sendInput({
+          type: 'mousemove',
+          x: (e.clientX - rect.left) / rect.width,
+          y: (e.clientY - rect.top) / rect.height,
+        });
+      });
+      videoEl.addEventListener('mousedown', (e) => sendInput({ type: 'mousedown', button: e.button }));
+      videoEl.addEventListener('mouseup', (e) => sendInput({ type: 'mouseup', button: e.button }));
+      videoEl.addEventListener('wheel', (e) => sendInput({ type: 'wheel', deltaY: e.deltaY }));
+      videoEl.addEventListener('contextmenu', (e) => e.preventDefault());
+      videoEl.addEventListener('keydown', (e) => {
+        e.preventDefault();
+        sendInput({ type: 'keydown', key: e.key });
+      });
+      videoEl.addEventListener('keyup', (e) => {
+        e.preventDefault();
+        sendInput({ type: 'keyup', key: e.key });
+      });
+
+      const touchCoords = (touch) => {
+        const rect = videoEl.getBoundingClientRect();
+        return {
+          x: (touch.clientX - rect.left) / rect.width,
+          y: (touch.clientY - rect.top) / rect.height,
+        };
+      };
+
+      videoEl.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 0) return;
+        e.preventDefault();
+        const { x, y } = touchCoords(e.touches[0]);
+        sendInput({ type: 'mousemove', x, y });
+        sendInput({ type: 'mousedown', button: 0 });
+      }, { passive: false });
+
+      videoEl.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 0) return;
+        e.preventDefault();
+        const { x, y } = touchCoords(e.touches[0]);
+        sendInput({ type: 'mousemove', x, y });
+      }, { passive: false });
+
+      videoEl.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        sendInput({ type: 'mouseup', button: 0 });
+      }, { passive: false });
 
       document.getElementById('toggle-server-cfg').addEventListener('click', async () => {
         const panel = document.getElementById('server-cfg-panel');
@@ -160,6 +218,17 @@ $loggedIn = !empty($_SESSION['user']);
       }
 
       async function connectToHost(hostId) {
+        if (es) {
+          es.close();
+          es = null;
+        }
+        dc = null;
+        if (pc) {
+          pc.close();
+          pc = null;
+        }
+        pendingIce = [];
+
         const statusEl = document.getElementById('status');
         statusEl.textContent = 'Conectando a ' + hostId + '...';
         currentHostId = hostId;
@@ -171,6 +240,11 @@ $loggedIn = !empty($_SESSION['user']);
           statusEl.textContent = 'WebRTC: ' + pc.connectionState;
           document.getElementById('client-cfg-panel').style.display =
             pc.connectionState === 'connected' ? 'block' : 'none';
+        };
+        pc.oniceconnectionstatechange = () => {
+          if (pc.connectionState !== 'connected' && pc.connectionState !== 'failed') {
+            statusEl.textContent = 'ICE: ' + pc.iceConnectionState;
+          }
         };
         dc = pc.createDataChannel('input');
         dc.onmessage = (e) => {
@@ -184,64 +258,9 @@ $loggedIn = !empty($_SESSION['user']);
           } catch (_) {}
         };
 
-        const videoEl = document.getElementById('remote-video');
-        const sendInput = (evt) => {
-          if (dc && dc.readyState === 'open') {
-            dc.send(JSON.stringify(evt));
-          }
-        };
-
-        videoEl.addEventListener('mousemove', (e) => {
-          const rect = videoEl.getBoundingClientRect();
-          sendInput({
-            type: 'mousemove',
-            x: (e.clientX - rect.left) / rect.width,
-            y: (e.clientY - rect.top) / rect.height,
-          });
-        });
-        videoEl.addEventListener('mousedown', (e) => sendInput({ type: 'mousedown', button: e.button }));
-        videoEl.addEventListener('mouseup', (e) => sendInput({ type: 'mouseup', button: e.button }));
-        videoEl.addEventListener('wheel', (e) => sendInput({ type: 'wheel', deltaY: e.deltaY }));
-        videoEl.addEventListener('contextmenu', (e) => e.preventDefault());
-        videoEl.addEventListener('keydown', (e) => {
-          e.preventDefault();
-          sendInput({ type: 'keydown', key: e.key });
-        });
-        videoEl.addEventListener('keyup', (e) => {
-          e.preventDefault();
-          sendInput({ type: 'keyup', key: e.key });
-        });
-
-        const touchCoords = (touch) => {
-          const rect = videoEl.getBoundingClientRect();
-          return {
-            x: (touch.clientX - rect.left) / rect.width,
-            y: (touch.clientY - rect.top) / rect.height,
-          };
-        };
-
-        videoEl.addEventListener('touchstart', (e) => {
-          if (e.touches.length === 0) return;
-          e.preventDefault();
-          const { x, y } = touchCoords(e.touches[0]);
-          sendInput({ type: 'mousemove', x, y });
-          sendInput({ type: 'mousedown', button: 0 });
-        }, { passive: false });
-
-        videoEl.addEventListener('touchmove', (e) => {
-          if (e.touches.length === 0) return;
-          e.preventDefault();
-          const { x, y } = touchCoords(e.touches[0]);
-          sendInput({ type: 'mousemove', x, y });
-        }, { passive: false });
-
-        videoEl.addEventListener('touchend', (e) => {
-          e.preventDefault();
-          sendInput({ type: 'mouseup', button: 0 });
-        }, { passive: false });
-
         pc.ontrack = (e) => {
-          document.getElementById('remote-video').srcObject = e.streams[0];
+          videoEl.srcObject = e.streams[0] || new MediaStream([e.track]);
+          videoEl.play().catch(() => {});
         };
 
         pc.onicecandidate = async (e) => {
@@ -254,7 +273,7 @@ $loggedIn = !empty($_SESSION['user']);
           }
         };
 
-        startSSE();
+        await startSSE();
 
         const offer = await pc.createOffer({ offerToReceiveVideo: true });
         await pc.setLocalDescription(offer);
@@ -266,16 +285,42 @@ $loggedIn = !empty($_SESSION['user']);
       }
 
       function startSSE() {
-        const es = new EventSource('api.php?action=poll');
-        es.addEventListener('signal', async (e) => {
-          const msg = JSON.parse(e.data);
-          if (!pc || msg.sender_id !== currentHostId) return;
-          if (msg.type === 'answer') {
-            document.getElementById('status').textContent = 'Answer recebido, negociando ICE...';
-            await pc.setRemoteDescription(new RTCSessionDescription(msg.payload));
-          } else if (msg.type === 'ice') {
-            await pc.addIceCandidate(new RTCIceCandidate(msg.payload));
-          }
+        return new Promise((resolve) => {
+          let resolved = false;
+          const finish = () => {
+            if (!resolved) {
+              resolved = true;
+              resolve();
+            }
+          };
+
+          es = new EventSource('api.php?action=poll&since_now=1');
+          es.addEventListener('ready', finish, { once: true });
+          setTimeout(finish, 1000);
+
+          es.addEventListener('signal', async (e) => {
+            const msg = JSON.parse(e.data);
+            if (!pc || msg.sender_id !== currentHostId) return;
+            if (msg.type === 'answer') {
+              if (pc.signalingState !== 'have-local-offer') return;
+              document.getElementById('status').textContent = 'Answer recebido, negociando ICE...';
+              await pc.setRemoteDescription(new RTCSessionDescription(msg.payload));
+              while (pendingIce.length > 0) {
+                const cand = pendingIce.shift();
+                try {
+                  await pc.addIceCandidate(new RTCIceCandidate(cand));
+                } catch (_) {}
+              }
+            } else if (msg.type === 'ice') {
+              if (!pc.remoteDescription) {
+                pendingIce.push(msg.payload);
+              } else {
+                try {
+                  await pc.addIceCandidate(new RTCIceCandidate(msg.payload));
+                } catch (_) {}
+              }
+            }
+          });
         });
       }
 
