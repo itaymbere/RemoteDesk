@@ -7,5 +7,9 @@ set HOST_TOKEN=changeme-token
 set RUST_LOG=info
 
 cd /d "%~dp0agent"
+if not exist ".\target\release\ag-remotedesk-agent.exe" (
+    echo Compilando agente...
+    cargo build --release
+)
 .\target\release\ag-remotedesk-agent.exe
 pause
