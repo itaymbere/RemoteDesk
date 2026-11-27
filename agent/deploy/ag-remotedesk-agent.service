@@ -1,0 +1,17 @@
+[Unit]
+Description=Ag-RemoteDesk Agent (Debian 13)
+After=network-online.target graphical-session.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/ag-remotedesk-agent
+Restart=always
+RestartSec=5
+Environment="SERVER_URL=https://seu-servidor.com/api.php"
+Environment="HOST_ID=debian-host-01"
+Environment="HOST_TOKEN=troque-este-token"
+Environment="DISPLAY=:0"
+
+[Install]
+WantedBy=default.target
